@@ -83,6 +83,7 @@ async def parse_recipe(request: RecipeURLRequest, db: Session = Depends(get_db))
         db.commit()
         db.refresh(recipe)
         
+        optimized_recipe.recipe_id = recipe.id
         return optimized_recipe
         
     except Exception as e:

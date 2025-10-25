@@ -33,6 +33,7 @@ class OptimizedRecipe(BaseModel):
     ingredients: List[Ingredient]
     prep_phase: List[PrepStep]
     cook_phase: List[CookStep]
+    recipe_id: Optional[int] = None
     total_time: Optional[int] = None
     prep_time: Optional[int] = None
     cook_time: Optional[int] = None

@@ -46,6 +46,7 @@ interface CookStep {
 }
 
 interface OptimizedRecipe {
+  recipe_id: number;
   title: string;
   ingredients: Ingredient[];
   prep_phase: PrepStep[];
@@ -98,7 +99,7 @@ const RecipeParser: React.FC = () => {
     if (!recipe) return;
 
     try {
-      const response = await axios.post('http://localhost:8000/api/start_cooking/1');
+      const response = await axios.post(`http://localhost:8000/api/start_cooking/${recipe.recipe_id}`);
       navigate(`/cooking/${response.data.session_id}`);
     } catch (err) {
       console.error('Failed to start cooking session:', err);
