@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from 'react';
+import React, { useState, useRef } from 'react';
 
 interface StatusState {
   status: 'success' | 'error';
@@ -94,6 +94,15 @@ export default function Home() {
 
       {/* Main Content */}
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-4rem)] p-8">
+
+        <h1 className="text-5xl md:text-7xl font-bold text-gray-900 leading-tight">
+            Get Step-by Step Instructions on Your
+            <span className="block bg-gradient-to-r from-orange-500 via-rose-500 to-purple-500 bg-clip-text text-transparent">
+              Favorite Recipe
+            </span>
+            <p><br/></p>
+        </h1>
+
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
           <div className="text-center mb-6">
             <div className="w-16 h-16 mx-auto mb-4 text-indigo-600 text-6xl">📄</div>
@@ -108,10 +117,10 @@ export default function Home() {
           <label
             htmlFor="pdf-upload"
             className={`
-              flex items-center justify-center gap-3 w-full py-4 px-6 rounded-lg
+              flex items-center justify-center gap-3 w-full bg-gradient-to-r from-orange-500 via-rose-500 to-purple-500 py-4 px-6 rounded-lg
               font-semibold text-white transition-all cursor-pointer
               ${uploading 
-                ? 'from-orange-500 to-rose-500 cursor-not-allowed' 
+                ? 'bg-gray-400 cursor-not-allowed' 
                 : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95'
               }
             `}
@@ -160,6 +169,20 @@ export default function Home() {
           )}
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="bg-gray-900 text-white py-12 mt-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <div className="flex items-center space-x-2 mb-4 md:mb-0">
+              <span className="text-2xl font-bold">Prep Pad</span>
+            </div>
+            <div className="text-gray-400 text-sm">
+              © 2025 Prep Pad. All rights reserved.
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
