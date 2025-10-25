@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSpeechSynthesis } from 'react-speech-kit';
 import {
   Container,
@@ -54,6 +54,11 @@ const CookingSession: React.FC = () => {
 
   const { speak, voices } = useSpeechSynthesis();
 
+  const voiceToFind = 'Google US English';
+  const voice = useMemo(() => {
+    return voices.findIndex(voice => voice.name === voiceToFind);
+  }, [voices, voiceToFind]);
+
   useEffect(() => {
     if (sessionId) {
       fetchSession();
@@ -92,7 +97,8 @@ const CookingSession: React.FC = () => {
         } : null);
       }
 
-      speak({ text: voiceResponse.response, voice:  voices[4] });
+      console.log(voices);
+      speak({ text: voiceResponse.response, voice:  voices[voice] });
 
       // Close dialog if command was processed
       setVoiceDialogOpen(false);
