@@ -1,151 +1,182 @@
-#This page has endpoints needs for the leases page
-from typing import Annotated, List
-from fastapi import Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
-from sqlmodel import and_
-from fastapi import APIRouter
-#Imports from other files
 from backend.app.db.database import get_db
-from backend.app.models.models import ConversationHistoryLeases, UserDetails, SavedApartments
-from backend.app.schemas import OutputApartmentDetails, QueryRequest
-from backend.apartment_data.data import apartments
-from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import JSONResponse
-import os
-import uuid
-from datetime import datetime, timezone
-from backend.vector_store.vector_database import upload_pdf_lease
-from backend.app.agents.summarize_lease_agent import summarize_lease_agent
-from backend.app.agents.lease_agent import lease_agent
-from langchain_core.messages import HumanMessage, AIMessage,SystemMessage, BaseMessage, ToolMessage
+from backend.app.models.models import Recipe, CookingSession, VoiceCommand
+from backend.app.schemas.schemas import (
+    RecipeURLRequest, OptimizedRecipe, VoiceCommandRequest, 
+    CookingSessionResponse
+)
+from backend.scrapers.recipe_scraper import RecipeScraper
+from backend.app.agents.recipe_optimizer import RecipeOptimizer
+from backend.app.agents.voice_assistant import VoiceCookingAssistant
 import json
+from datetime import datetime
+from typing import List
+
 router = APIRouter()
 
-#GETS LEASE TERMS FOR SAVED APARTMENTS TO DISPLAY IN THE TABLE
-@router.get("/lease_terms")
-def get_lease_terms(db: Session = Depends(get_db)):
-    apartments = db.exec(select(SavedApartments)).all()
-    #using json to convert the json string back into a python list
-    lease_terms_all_apartments = [
-        {"address": apartment.address, "lease_terms": json.loads(apartment.lease_terms)} for apartment in apartments
-    ]
+# Initialize services
+scraper = RecipeScraper()
+optimizer = RecipeOptimizer()
+voice_assistant = VoiceCookingAssistant()
 
-#    Example Output
-#    [
-#        {
-#            "address": "7200 Gorden Farms Pkwy, Dublin, OH 43016",
-#            "lease_terms": ["Flexible", "One year"]
-#        },
-#        {
-#            "address": "5252 Willow Grove Pl S, Dublin, OH 43017",
-#            "lease_terms": ["1 Year"]
-#        }
-#    ]
-    return lease_terms_all_apartments
-
-
-#This Router is called once the user clicks the sumbit button on the Leases Page
-@router.post("/upload_pdf/")
-async def upload_pdf(file: UploadFile = File(...)):
-    # Create a unique file name and created the unique pdf_id to identify the pdf
-    pdf_id = str(uuid.uuid4())
-    pdf_path = f"pdf/{pdf_id}.pdf"
-
-    # Save the uploaded PDF
-    os.makedirs("pdf", exist_ok=True)
-    contents = await file.read()
-    with open(pdf_path, "wb") as f:
-        f.write(contents)
-
-    # Calls the function to store the pdf to Pinecone vector database
+@router.post("/parse_recipe", response_model=OptimizedRecipe)
+async def parse_recipe(request: RecipeURLRequest, db: Session = Depends(get_db)):
+    """
+    Parse a recipe from a URL and optimize it for mise-en-place cooking
+    """
     try:
-        message = upload_pdf_lease(pdf_path, pdf_id)
-        print(message)
+        # Scrape the recipe from the URL
+        scraped_data = scraper.scrape_recipe(request.url)
+        
+        # Optimize the recipe
+        optimized_recipe = optimizer.optimize_recipe(scraped_data)
+        
+        # Save to database
+        recipe = Recipe(
+            title=optimized_recipe.title,
+            source_url=request.url,
+            original_recipe=json.dumps(scraped_data),
+            prep_phase=json.dumps([step.dict() for step in optimized_recipe.prep_phase]),
+            cook_phase=json.dumps([step.dict() for step in optimized_recipe.cook_phase]),
+            ingredients=json.dumps([ing.dict() for ing in optimized_recipe.ingredients]),
+            total_time=optimized_recipe.total_time,
+            prep_time=optimized_recipe.prep_time,
+            cook_time=optimized_recipe.cook_time,
+            servings=optimized_recipe.servings,
+            difficulty=optimized_recipe.difficulty,
+            user_id="default_user"  # In a real app, this would come from authentication
+        )
+        
+        db.add(recipe)
+        db.commit()
+        db.refresh(recipe)
+        
+        return optimized_recipe
+        
     except Exception as e:
-        print(f"Error uploading to vector database: {e}")
-        return {"error": str(e)}
-#    Returns an id number for that pdf
-#   {
-#        "pdf_id": "f4a7c0e2-52cb-4d41-9132-9b6a8c3e7c99"
-#    }
-    return {"pdf_id": pdf_id}
+        raise HTTPException(status_code=400, detail=f"Failed to parse recipe: {str(e)}")
 
-#This Router is called once the user clicks the SUMMARIZE button on the Leases Page
-@router.get("/summarize_lease/{pdf_id}")
-async def summarize_lease(pdf_id: str):
-    #Call the summarize lease agent
-    important_sections = summarize_lease_agent(pdf_id)
-    #Returns a list of the most important parts of the lease TO BE HIGHLITED
-    return {"important_sections": important_sections}
+@router.get("/recipes")
+def get_recipes(db: Session = Depends(get_db)):
+    """
+    Get all saved recipes
+    """
+    recipes = db.exec(select(Recipe)).all()
+    return {"recipes": recipes}
 
-
-#--------------------------------------------This gets the coversation history for the pdf uploaded----------------------------#
-@router.get("/get_lease_conversation/{pdf_id}")
-def get_lease_conversation(pdf_id: str, db: Session = Depends(get_db)):
-    # Get all messages (human + AI), ordered by timestamp
-    statement = (
-        select(ConversationHistoryLeases)
-        .where(ConversationHistoryLeases.pdf_id == pdf_id)
-        .order_by(ConversationHistoryLeases.timestamp)
+@router.get("/recipe/{recipe_id}")
+def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
+    """
+    Get a specific recipe by ID
+    """
+    recipe = db.get(Recipe, recipe_id)
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    
+    # Parse JSON fields back to objects
+    optimized_recipe = OptimizedRecipe(
+        title=recipe.title,
+        ingredients=[json.loads(ing) for ing in json.loads(recipe.ingredients)],
+        prep_phase=[json.loads(step) for step in json.loads(recipe.prep_phase)],
+        cook_phase=[json.loads(step) for step in json.loads(recipe.cook_phase)],
+        total_time=recipe.total_time,
+        prep_time=recipe.prep_time,
+        cook_time=recipe.cook_time,
+        servings=recipe.servings,
+        difficulty=recipe.difficulty
     )
-    messages = db.exec(statement).all()
+    
+    return optimized_recipe
 
-    # [{"sender": "ai", "content": "How can I help you"}, {"sender": "human", "content": "I want to know....."}...... ]
-    return [
-        {"sender": msg.sender, "content": msg.content} for msg in messages
-    ]
-
-
-#Gets ai_response to user_question and save both to the database (where the lease_agent is called)
-@router.put("/save_lease_conversation/{pdf_id}")
-def save_lease_conversation(pdf_id: str, query: QueryRequest, db: Session = Depends(get_db),):
-    statement = (
-        select(ConversationHistoryLeases)
-        .where(ConversationHistoryLeases.pdf_id == pdf_id)
-        .order_by(ConversationHistoryLeases.timestamp)
+@router.post("/start_cooking/{recipe_id}", response_model=CookingSessionResponse)
+def start_cooking_session(recipe_id: int, db: Session = Depends(get_db)):
+    """
+    Start a new cooking session for a recipe
+    """
+    recipe = db.get(Recipe, recipe_id)
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    
+    # Create new cooking session
+    session = CookingSession(
+        recipe_id=recipe_id,
+        user_id="default_user",  # In a real app, this would come from authentication
+        current_step=json.loads(recipe.prep_phase)[0]["instruction"] if json.loads(recipe.prep_phase) else None,
+        current_phase="prep",
+        is_active=True
     )
-    messages = db.exec(statement).all()
-    memory = []
     
-    #--------------------------------------------------Gather memory and call agent---------------------------------#
-    for msg in messages:
-        if msg.sender == 'human':
-            memory.append(HumanMessage(content = msg.content))
-        elif msg.sender == 'ai':
-            memory.append(AIMessage(content = msg.content))
-    
-    # Add the current user question to memory
-    memory.append(HumanMessage(content=query.question))
-    
-    #call the lease agent to get ai_response to user question
-    ai_response = lease_agent(memory, pdf_id)
-    
-    # Extract the AI response content
-    if hasattr(ai_response, 'content'):
-        ai_content = ai_response.content
-    else:
-        ai_content = "I'm sorry, I couldn't process your question at this time."
-
-    #------------------------------------------------------------------------------------------------------------------#
-
-    # Save human message
-    human_message = ConversationHistoryLeases(
-        pdf_id=pdf_id,
-        sender="human",
-        content=query.question,
-        timestamp=datetime.now(timezone.utc)
-    )
-    db.add(human_message)
-    
-    # Save AI response
-    ai_message = ConversationHistoryLeases(
-        pdf_id=pdf_id,
-        sender="ai",
-        content=ai_content,
-        timestamp=datetime.now(timezone.utc)
-    )
-    db.add(ai_message)
-    
-    # Commit the changes to the database
+    db.add(session)
     db.commit()
-    return {"message": "Conversation saved successfully!", "ai_response": ai_content}
+    db.refresh(session)
+    
+    return CookingSessionResponse(
+        session_id=session.id,
+        recipe_title=recipe.title,
+        current_step=session.current_step,
+        current_phase=session.current_phase,
+        is_active=session.is_active,
+        started_at=session.started_at
+    )
+
+@router.post("/voice_command")
+def process_voice_command(request: VoiceCommandRequest, db: Session = Depends(get_db)):
+    """
+    Process voice commands during cooking
+    """
+    session = db.get(CookingSession, request.session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Cooking session not found")
+    
+    recipe = db.get(Recipe, session.recipe_id)
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    
+    # Parse recipe data
+    optimized_recipe = OptimizedRecipe(
+        title=recipe.title,
+        ingredients=[json.loads(ing) for ing in json.loads(recipe.ingredients)],
+        prep_phase=[json.loads(step) for step in json.loads(recipe.prep_phase)],
+        cook_phase=[json.loads(step) for step in json.loads(recipe.cook_phase)],
+        total_time=recipe.total_time,
+        prep_time=recipe.prep_time,
+        cook_time=recipe.cook_time,
+        servings=recipe.servings,
+        difficulty=recipe.difficulty
+    )
+    
+    # Process the voice command
+    response = voice_assistant.process_voice_command(
+        request.command, session, optimized_recipe, db
+    )
+    
+    # Log the voice command
+    voice_cmd = VoiceCommand(
+        session_id=request.session_id,
+        command=request.command
+    )
+    db.add(voice_cmd)
+    db.commit()
+    
+    return response
+
+@router.get("/cooking_session/{session_id}")
+def get_cooking_session(session_id: int, db: Session = Depends(get_db)):
+    """
+    Get current status of a cooking session
+    """
+    session = db.get(CookingSession, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Cooking session not found")
+    
+    recipe = db.get(Recipe, session.recipe_id)
+    
+    return CookingSessionResponse(
+        session_id=session.id,
+        recipe_title=recipe.title if recipe else "Unknown Recipe",
+        current_step=session.current_step,
+        current_phase=session.current_phase,
+        is_active=session.is_active,
+        started_at=session.started_at
+    )

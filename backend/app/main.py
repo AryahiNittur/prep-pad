@@ -1,7 +1,5 @@
 from fastapi import FastAPI
-from backend.routes import questions
-from backend.routes import maps
-from backend.routes import lease, spreadsheet
+from backend.routes import recipe_agent
 from backend.app.db.database import create_db
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,14 +15,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 # Include routers
-app.include_router(questions.router)
-app.include_router(maps.router)
-app.include_router(lease.router)
-app.include_router(spreadsheet.router)
+app.include_router(recipe_agent.router, prefix="/api", tags=["recipes"])
 
 @app.get("/")
 def root():
-    return {"message": "Welcome to FastAPI!"}
+    return {"message": "Welcome to Prep Pad - Your Recipe Prep Assistant!"}
 
 #Connects to the frontend
 app.add_middleware(
