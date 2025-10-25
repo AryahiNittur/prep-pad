@@ -1,0 +1,20 @@
+# Flask + CORS
+flask==2.3.3
+flask-cors==4.0.0
+
+# .env support
+python-dotenv==1.0.1
+
+# PDF processing
+pymupdf==1.23.22  # also known as fitz
+pypdf>=3.0.0  # for PDF text extraction
+
+# LangChain components
+langchain>=0.1.0
+langchain-openai>=0.1.0
+langchain-community>=0.0.36
+langchain-pinecone>=0.1.0
+langchain-text-splitters>=0.0.1
+langchain-core>=0.1.48
+openai>=1.30.0
+pinecone-client>=3.2.0
