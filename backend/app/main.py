@@ -21,6 +21,15 @@ app.include_router(recipe_agent.router, prefix="/api", tags=["recipes"])
 def root():
     return {"message": "Welcome to Prep Pad - Your Recipe Prep Assistant!"}
 
+@app.get("/health")
+def health_check():
+    return {
+        "status": "healthy",
+        "service": "Prep Pad",
+        "version": "1.0.0",
+        "database": "connected"
+    }
+
 #Connects to the frontend
 app.add_middleware(
     CORSMiddleware,
