@@ -19,7 +19,7 @@ app.include_router(recipe_agent.router, prefix="/api", tags=["recipes"])
 
 @app.get("/")
 def root():
-    return {"message": "Welcome to Mise-en-Place AI - Your Recipe Prep Assistant!"}
+    return {"message": "Welcome to Prep Pad - Your Recipe Prep Assistant!"}
 
 #Connects to the frontend
 app.add_middleware(

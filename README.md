@@ -1,10 +1,10 @@
-# Mise-en-Place AI 🍳
+# Prep Pad 🍳
 
 **The AI Recipe Prep Assistant** - Transform any recipe into an optimized, voice-controlled cooking experience.
 
 ## 🎯 What It Does
 
-Following a recipe while cooking is chaotic. You constantly have to re-read steps, wash your hands to check your phone, and figure out timing. Mise-en-Place AI solves this by:
+Following a recipe while cooking is chaotic. You constantly have to re-read steps, wash your hands to check your phone, and figure out timing. Prep Pad solves this by:
 
 1. **Scraping any recipe URL** from cooking blogs/websites
 2. **AI-powered optimization** that rewrites recipes into prep-first workflows

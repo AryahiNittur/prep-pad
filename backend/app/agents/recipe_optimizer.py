@@ -16,7 +16,7 @@ class RecipeOptimizer:
     
     def optimize_recipe(self, scraped_data: dict) -> OptimizedRecipe:
         """
-        Transform a scraped recipe into an optimized prep-first workflow
+        Transform a scraped recipe into an optimized prep-first workflow for Prep Pad
         """
         # Create the optimization prompt
         prompt = self._create_optimization_prompt(scraped_data)

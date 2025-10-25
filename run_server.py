@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Startup script for the Mise-en-Place AI FastAPI backend
+Startup script for the Prep Pad FastAPI backend
 """
 import uvicorn
 import os

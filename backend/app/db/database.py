@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Database URL - you can change this to your preferred database
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./mise_en_place.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./prep_pad.db")
 
 # Create engine
 engine = create_engine(DATABASE_URL, echo=True)
