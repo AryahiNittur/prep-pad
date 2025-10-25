@@ -42,7 +42,16 @@ class VoiceCookingAssistant:
     
     def _handle_next_step(self, session: CookingSession, recipe: OptimizedRecipe, db: Session) -> Dict[str, Any]:
         """Move to the next step in the cooking process"""
-        if session.current_phase == 'prep':
+        # Check if recipe has data
+        if not recipe.prep_phase and not recipe.cook_phase:
+            return {
+                "response": "No recipe steps available. Please parse a recipe first.",
+                "current_step": session.current_step,
+                "current_phase": session.current_phase,
+                "is_complete": False
+            }
+        
+        if session.current_phase == 'prep' and recipe.prep_phase:
             # Find current prep step and move to next
             current_prep_index = self._get_current_prep_index(session, recipe)
             if current_prep_index < len(recipe.prep_phase) - 1:
@@ -52,9 +61,13 @@ class VoiceCookingAssistant:
             else:
                 # Move to cooking phase
                 session.current_phase = 'cook'
-                session.current_step = recipe.cook_phase[0].instruction
-                response_text = f"Prep complete! Starting cooking phase. Step 1: {session.current_step}"
-        else:
+                if recipe.cook_phase and len(recipe.cook_phase) > 0:
+                    session.current_step = recipe.cook_phase[0].instruction
+                    response_text = f"Prep complete! Starting cooking phase. Step 1: {session.current_step}"
+                else:
+                    session.is_active = False
+                    response_text = "Prep complete! No cooking steps available."
+        elif session.current_phase == 'cook' and recipe.cook_phase:
             # Handle cooking steps
             current_cook_index = self._get_current_cook_index(session, recipe)
             if current_cook_index < len(recipe.cook_phase) - 1:
@@ -65,6 +78,8 @@ class VoiceCookingAssistant:
                 # Recipe complete
                 session.is_active = False
                 response_text = "Congratulations! Your recipe is complete. Enjoy your meal!"
+        else:
+            response_text = "No more steps available in this phase."
         
         db.commit()
         return {
@@ -154,7 +169,7 @@ class VoiceCookingAssistant:
     
     def _get_current_prep_index(self, session: CookingSession, recipe: OptimizedRecipe) -> int:
         """Get the current prep step index"""
-        if not session.current_step:
+        if not session.current_step or not recipe.prep_phase:
             return 0
         
         for i, step in enumerate(recipe.prep_phase):
@@ -164,7 +179,7 @@ class VoiceCookingAssistant:
     
     def _get_current_cook_index(self, session: CookingSession, recipe: OptimizedRecipe) -> int:
         """Get the current cooking step index"""
-        if not session.current_step:
+        if not session.current_step or not recipe.cook_phase:
             return 0
         
         for i, step in enumerate(recipe.cook_phase):
@@ -174,12 +189,16 @@ class VoiceCookingAssistant:
     
     def _calculate_remaining_prep_time(self, session: CookingSession, recipe: OptimizedRecipe) -> int:
         """Calculate remaining prep time"""
+        if not recipe.prep_phase:
+            return 0
         current_index = self._get_current_prep_index(session, recipe)
         remaining_steps = recipe.prep_phase[current_index:]
         return sum(step.time_estimate or 0 for step in remaining_steps)
     
     def _calculate_remaining_cook_time(self, session: CookingSession, recipe: OptimizedRecipe) -> int:
         """Calculate remaining cooking time"""
+        if not recipe.cook_phase:
+            return 0
         current_index = self._get_current_cook_index(session, recipe)
         remaining_steps = recipe.cook_phase[current_index:]
         return sum(step.time_estimate or 0 for step in remaining_steps)

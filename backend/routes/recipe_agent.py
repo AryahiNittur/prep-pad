@@ -20,6 +20,37 @@ scraper = RecipeScraper()
 optimizer = RecipeOptimizer()
 voice_assistant = VoiceCookingAssistant()
 
+@router.post("/create_recipe", response_model=OptimizedRecipe)
+async def create_recipe(recipe_data: OptimizedRecipe, db: Session = Depends(get_db)):
+    """
+    Create a recipe directly without scraping
+    """
+    try:
+        # Save to database
+        recipe = Recipe(
+            title=recipe_data.title,
+            source_url="direct_creation",
+            original_recipe=json.dumps({"title": recipe_data.title}),
+            prep_phase=json.dumps([step.dict() for step in recipe_data.prep_phase]),
+            cook_phase=json.dumps([step.dict() for step in recipe_data.cook_phase]),
+            ingredients=json.dumps([ing.dict() for ing in recipe_data.ingredients]),
+            total_time=recipe_data.total_time,
+            prep_time=recipe_data.prep_time,
+            cook_time=recipe_data.cook_time,
+            servings=recipe_data.servings,
+            difficulty=recipe_data.difficulty,
+            user_id="test_user"
+        )
+        
+        db.add(recipe)
+        db.commit()
+        db.refresh(recipe)
+        
+        return recipe_data
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to create recipe: {str(e)}")
+
 @router.post("/parse_recipe", response_model=OptimizedRecipe)
 async def parse_recipe(request: RecipeURLRequest, db: Session = Depends(get_db)):
     """
@@ -133,18 +164,25 @@ def process_voice_command(request: VoiceCommandRequest, db: Session = Depends(ge
     if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
     
-    # Parse recipe data
-    optimized_recipe = OptimizedRecipe(
-        title=recipe.title,
-        ingredients=[json.loads(ing) for ing in json.loads(recipe.ingredients)],
-        prep_phase=[json.loads(step) for step in json.loads(recipe.prep_phase)],
-        cook_phase=[json.loads(step) for step in json.loads(recipe.cook_phase)],
-        total_time=recipe.total_time,
-        prep_time=recipe.prep_time,
-        cook_time=recipe.cook_time,
-        servings=recipe.servings,
-        difficulty=recipe.difficulty
-    )
+    # Parse recipe data safely
+    try:
+        ingredients_data = json.loads(recipe.ingredients) if recipe.ingredients else []
+        prep_phase_data = json.loads(recipe.prep_phase) if recipe.prep_phase else []
+        cook_phase_data = json.loads(recipe.cook_phase) if recipe.cook_phase else []
+        
+        optimized_recipe = OptimizedRecipe(
+            title=recipe.title,
+            ingredients=ingredients_data,
+            prep_phase=prep_phase_data,
+            cook_phase=cook_phase_data,
+            total_time=recipe.total_time,
+            prep_time=recipe.prep_time,
+            cook_time=recipe.cook_time,
+            servings=recipe.servings,
+            difficulty=recipe.difficulty
+        )
+    except (json.JSONDecodeError, TypeError) as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse recipe data: {str(e)}")
     
     # Process the voice command
     response = voice_assistant.process_voice_command(
