@@ -53,7 +53,7 @@ const CookingSession: React.FC = () => {
   const [voiceCommand, setVoiceCommand] = useState('');
   const [lastResponse, setLastResponse] = useState<string | null>(null);
 
-  const { speak, voices } = useSpeechSynthesis();
+  const { speak, cancel, voices } = useSpeechSynthesis();
 
   const voiceToFind = 'Google US English';
   const voice = useMemo(() => {
@@ -98,6 +98,7 @@ const CookingSession: React.FC = () => {
         } : null);
       }
 
+      cancel();
       console.log(voices);
       speak({ text: voiceResponse.response, voice:  voices[voice] });
 
