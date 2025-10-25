@@ -26,6 +26,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import Timer from '../components/Timer';
 
 interface SessionData {
   session_id: number;
@@ -115,6 +116,7 @@ const CookingSession: React.FC = () => {
     { command: 'repeat', label: 'Repeat', icon: <RepeatIcon /> },
     { command: 'what prep', label: 'What Prep?', icon: <KitchenIcon /> },
     { command: 'time', label: 'Time Left', icon: <TimerIcon /> },
+    { command: 'timer info', label: 'Timer Info', icon: <TimerIcon /> },
   ];
 
   if (!session) {
@@ -167,6 +169,15 @@ const CookingSession: React.FC = () => {
               <Typography variant="h4" sx={{ mb: 3, minHeight: 60 }}>
                 {session.current_step}
               </Typography>
+              
+              {/* Timer Component - shows when minutes are detected in the instruction */}
+              <Timer 
+                instruction={session.current_step}
+                onComplete={() => {
+                  // Optional: Auto-advance to next step when timer completes
+                  // sendVoiceCommand('next');
+                }}
+              />
               
               <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
                 <Button

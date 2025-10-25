@@ -3,6 +3,7 @@ from backend.app.schemas.schemas import OptimizedRecipe, PrepStep, CookStep
 from backend.app.models.models import CookingSession
 from sqlmodel import Session, select
 import os
+import re
 from dotenv import load_dotenv
 from typing import Optional, Dict, Any
 
@@ -35,6 +36,8 @@ class VoiceCookingAssistant:
             return self._handle_resume(session, db)
         elif command in ['time', 'how long', 'timer']:
             return self._handle_time_query(session, recipe)
+        elif command in ['timer info', 'timer help', 'start timer']:
+            return self._handle_timer_info(session, recipe)
         elif command in ['ingredients', 'what ingredients']:
             return self._handle_ingredients_query(recipe)
         else:
@@ -57,13 +60,19 @@ class VoiceCookingAssistant:
             if current_prep_index < len(recipe.prep_phase) - 1:
                 next_prep_index = current_prep_index + 1
                 session.current_step = recipe.prep_phase[next_prep_index].instruction
+                timer_info = self._enhance_step_with_timer_info(session.current_step)
                 response_text = f"Next prep step: {session.current_step}"
+                if timer_info["has_timer"]:
+                    response_text += f" {timer_info['timer_message']}"
             else:
                 # Move to cooking phase
                 session.current_phase = 'cook'
                 if recipe.cook_phase and len(recipe.cook_phase) > 0:
                     session.current_step = recipe.cook_phase[0].instruction
+                    timer_info = self._enhance_step_with_timer_info(session.current_step)
                     response_text = f"Prep complete! Starting cooking phase. Step 1: {session.current_step}"
+                    if timer_info["has_timer"]:
+                        response_text += f" {timer_info['timer_message']}"
                 else:
                     session.is_active = False
                     response_text = "Prep complete! No cooking steps available."
@@ -73,7 +82,10 @@ class VoiceCookingAssistant:
             if current_cook_index < len(recipe.cook_phase) - 1:
                 next_cook_index = current_cook_index + 1
                 session.current_step = recipe.cook_phase[next_cook_index].instruction
+                timer_info = self._enhance_step_with_timer_info(session.current_step)
                 response_text = f"Step {next_cook_index + 1}: {session.current_step}"
+                if timer_info["has_timer"]:
+                    response_text += f" {timer_info['timer_message']}"
             else:
                 # Recipe complete
                 session.is_active = False
@@ -160,11 +172,27 @@ class VoiceCookingAssistant:
             "ingredients": ingredients_list
         }
     
+    def _handle_timer_info(self, session: CookingSession, recipe: OptimizedRecipe) -> Dict[str, Any]:
+        """Provide timer information for the current step"""
+        timer_info = self._enhance_step_with_timer_info(session.current_step)
+        
+        if timer_info["has_timer"]:
+            response_text = timer_info["timer_message"]
+        else:
+            response_text = "The current step doesn't require a timer. If you need to time something manually, you can use your own timer or ask me to help with timing."
+        
+        return {
+            "response": response_text,
+            "timer_info": timer_info,
+            "current_step": session.current_step,
+            "current_phase": session.current_phase
+        }
+    
     def _handle_unknown_command(self, command: str) -> Dict[str, Any]:
         """Handle unknown commands"""
         return {
-            "response": f"I didn't understand '{command}'. Try saying 'next', 'repeat', 'what prep', 'pause', or 'resume'.",
-            "suggestions": ["next", "repeat", "what prep", "pause", "resume", "time", "ingredients"]
+            "response": f"I didn't understand '{command}'. Try saying 'next', 'repeat', 'what prep', 'pause', 'resume', or 'timer info'.",
+            "suggestions": ["next", "repeat", "what prep", "pause", "resume", "time", "ingredients", "timer info"]
         }
     
     def _get_current_prep_index(self, session: CookingSession, recipe: OptimizedRecipe) -> int:
@@ -202,3 +230,42 @@ class VoiceCookingAssistant:
         current_index = self._get_current_cook_index(session, recipe)
         remaining_steps = recipe.cook_phase[current_index:]
         return sum(step.time_estimate or 0 for step in remaining_steps)
+    
+    def _detect_timer_in_instruction(self, instruction: str) -> Optional[int]:
+        """Detect if instruction contains a timer and return the time in minutes"""
+        # Regex patterns to detect time mentions in instructions
+        time_patterns = [
+            r'(\d+)\s*minutes?',
+            r'(\d+)\s*mins?',
+            r'(\d+)\s*min',
+            r'for\s*(\d+)\s*minutes?',
+            r'cook\s*for\s*(\d+)\s*minutes?',
+            r'bake\s*for\s*(\d+)\s*minutes?',
+            r'simmer\s*for\s*(\d+)\s*minutes?',
+            r'boil\s*for\s*(\d+)\s*minutes?',
+        ]
+        
+        for pattern in time_patterns:
+            match = re.search(pattern, instruction, re.IGNORECASE)
+            if match:
+                time_str = match.group(1)
+                if time_str:
+                    time = int(time_str)
+                    if 0 < time <= 300:  # Reasonable cooking time range (0-5 hours)
+                        return time
+        return None
+    
+    def _enhance_step_with_timer_info(self, instruction: str) -> Dict[str, Any]:
+        """Enhance step information with timer detection"""
+        timer_minutes = self._detect_timer_in_instruction(instruction)
+        
+        result = {
+            "instruction": instruction,
+            "has_timer": timer_minutes is not None,
+        }
+        
+        if timer_minutes:
+            result["timer_minutes"] = timer_minutes
+            result["timer_message"] = f"This step requires {timer_minutes} minute{'s' if timer_minutes != 1 else ''}. A timer will be available to help you track the time."
+        
+        return result
