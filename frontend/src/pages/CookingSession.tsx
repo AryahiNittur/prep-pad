@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSpeechSynthesis } from 'react-speech-kit';
 import {
   Container,
   Typography,
@@ -51,6 +52,8 @@ const CookingSession: React.FC = () => {
   const [voiceCommand, setVoiceCommand] = useState('');
   const [lastResponse, setLastResponse] = useState<string | null>(null);
 
+  const { speak, voices } = useSpeechSynthesis();
+
   useEffect(() => {
     if (sessionId) {
       fetchSession();
@@ -88,6 +91,8 @@ const CookingSession: React.FC = () => {
           is_active: !voiceResponse.is_complete,
         } : null);
       }
+
+      speak({ text: voiceResponse.response, voice:  voices[4] });
 
       // Close dialog if command was processed
       setVoiceDialogOpen(false);
