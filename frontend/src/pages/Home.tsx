@@ -46,7 +46,27 @@ const Home: React.FC = () => {
   ];
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        backgroundImage: 'url("/preppadhomepagephoto.jpg")',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundAttachment: 'fixed',
+        position: 'relative',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(255, 255, 255, 0.85)',
+          zIndex: 1,
+        },
+      }}
+    >
+      <Container maxWidth="lg" sx={{ py: 4, position: 'relative', zIndex: 2 }}>
       {/* Hero Section */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -200,7 +220,8 @@ const Home: React.FC = () => {
           </div>
         </div>
       </footer>
-    </Container>
+      </Container>
+    </Box>
   );
 };
 
