@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useSpeechSynthesis } from 'react-speech-kit';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useSpeechSynthesis, useSpeechRecognition } from 'react-speech-kit';
 import {
   Container,
   Typography,
@@ -9,11 +9,6 @@ import {
   Button,
   Chip,
   Fab,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
   Alert,
 } from '@mui/material';
 import {
@@ -24,7 +19,7 @@ import {
   Timer as TimerIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import Timer from '../components/Timer';
 
@@ -46,34 +41,152 @@ interface VoiceResponse {
 
 const CookingSession: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
-  const navigate = useNavigate();
   const [session, setSession] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [voiceDialogOpen, setVoiceDialogOpen] = useState(false);
+  const [first, setFirst] = useState(true);
   const [voiceCommand, setVoiceCommand] = useState('');
   const [lastResponse, setLastResponse] = useState<string | null>(null);
 
+  const [isWakeWordMode, setIsWakeWordMode] = useState(false);
+  const isWakeWordModeRef = useRef(isWakeWordMode);
+
+  useEffect(() => {
+    isWakeWordModeRef.current = isWakeWordMode;
+  }, [isWakeWordMode]);
+
   const { speak, cancel, voices } = useSpeechSynthesis();
+  const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  const [timestamp, setTimestamp] = useState(0);
+
+  const { listen, listening, stop } = useSpeechRecognition({
+    onResult: (result) => {
+      const speechText = result.toString().toLowerCase();
+      setVoiceCommand(speechText);
+      console.log('onresult');
+      console.log(`${isWakeWordModeRef.current}`);
+      if (isWakeWordModeRef.current) {
+        // Check for wake word
+        if (speechText.includes('hey prep')) {
+          console.log('1set');
+          setTimeout(() => {
+            setIsWakeWordMode(false);
+            setVoiceCommand('');
+            setTimestamp(Date.now());
+          }, 500);
+          //stop();
+        }
+      } else {
+        // Actually stop listening and restart for wake word mode
+        /*
+        stop();
+        setTimeout(() => {
+          console.log('1listen');
+          listen({ interimResults: true, lang: 'en-US' });
+          }, 500);*/
+          
+        console.log('in else');
+        // Reset timeout when we get new speech input during command mode
+        const newTimeoutId = setTimeout(() => {
+          console.log('RESETER');
+          // Actually stop listening and restart for wake word mode
+          stop();
+          //setVoiceCommand('');
+          console.log('2set');
+          //setIsWakeWordMode(true);
+        }, 3000); // Return to wake word mode after 3 seconds of silence
+        console.log('setid');
+        setTimeoutId(newTimeoutId);
+      }
+    },
+    onEnd: () => {
+      if (timeoutId) {
+        console.log('clearid');
+        clearTimeout(timeoutId);
+        setTimeoutId(null);
+      }
+      
+      if (!isWakeWordModeRef.current && voiceCommand.trim()) {
+        sendVoiceCommand(voiceCommand);
+      }
+      // Return to wake word mode after processing command
+      setTimeout(() => {
+        setVoiceCommand('');
+        console.log('3set');
+        setIsWakeWordMode(true);
+      }, 1000);
+    },
+  });
 
   const voiceToFind = 'Google US English';
   const voice = useMemo(() => {
-    return voices.findIndex(voice => voice.name === voiceToFind);
+    const voiceIndex = voices.findIndex(voice => voice.name === voiceToFind);
+    // Fallback to first available voice if preferred voice not found
+    return voiceIndex !== -1 ? voiceIndex : 0;
   }, [voices, voiceToFind]);
+
+  const fetchSession = useCallback(async () => {
+    try {
+      const response = await axios.get(`http://localhost:8000/api/cooking_session/${sessionId}`);
+      const sessionData = response.data;
+      setSession(sessionData);
+      console.log('session set');
+      
+      // Speak the first step on startup
+    } catch (error) {
+      console.error('Failed to fetch session:', error);
+    }
+  }, [sessionId]);
 
   useEffect(() => {
     if (sessionId) {
       fetchSession();
     }
-  }, [sessionId]);
+  }, [sessionId, fetchSession]);
 
-  const fetchSession = async () => {
-    try {
-      const response = await axios.get(`http://localhost:8000/api/cooking_session/${sessionId}`);
-      setSession(response.data);
-    } catch (error) {
-      console.error('Failed to fetch session:', error);
+  useEffect(() => {
+    if (first && session) {
+      setFirst(false);
+      speak({ text: `Welcome to your cooking session. ${session.current_step}`, voice: voices[voice] });
+      console.log('welcome message spoken');
+      console.log('retard set');
+      setIsWakeWordMode(true);
     }
-  };
+  }, [first, session, speak, voices, voice]);
+
+  useEffect(() => {
+    if (isWakeWordModeRef.current) {
+      console.log('1stop');
+      stop();
+      setTimeout(() => {
+        console.log('newlisten');
+        listen({ interimResults: true, lang: 'en-US' });
+      }, 500);
+    }
+  }, [isWakeWordMode, listen, stop]);
+  
+  // Cleanup timeout on unmount
+  /*
+  useEffect(() => {
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [timeoutId]); */
+
+  // Start listening on mount with delay to ensure component is ready
+  /*
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!listening) {
+        console.log('2listen');
+        listen({ interimResults: true, lang: 'en-US' });
+      }
+    }, 1000); // 1 second delay to ensure component is fully mounted
+
+    return () => clearTimeout(timer);
+  }, [listening, listen]); // Include dependencies
+  */
 
   const sendVoiceCommand = async (command: string) => {
     if (!sessionId) return;
@@ -99,16 +212,53 @@ const CookingSession: React.FC = () => {
       }
 
       cancel();
-      console.log(voices);
-      speak({ text: voiceResponse.response, voice:  voices[voice] });
+      console.log('2Available voices:', voices.map(v => v.name));
+      console.log('Using voice index:', voice);
+      if (voices.length > 0) {
+        speak({ text: voiceResponse.response, voice: voices[voice] });
+      } else {
+        console.warn('No voices available for speech synthesis');
+        // Fallback to default voice
+        speak({ text: voiceResponse.response });
+      }
 
-      // Close dialog if command was processed
-      setVoiceDialogOpen(false);
+      // Clear voice command after processing
       setVoiceCommand('');
     } catch (error) {
       console.error('Failed to send voice command:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleSpeechRecognition = () => {
+    if (listening) {
+      console.log('2stop');
+      stop();
+      /*
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        setTimeoutId(null);
+      }
+      setIsWakeWordMode(true);
+      */
+    } else {
+      setVoiceCommand('');
+      console.log('lastset');
+      setIsWakeWordMode(false);
+      console.log('3listen');
+      listen({ interimResults: false, lang: 'en-US' });
+    }
+  };
+
+  const testSpeech = () => {
+    console.log('Testing speech synthesis...');
+    console.log('3Available voices:', voices.map(v => v.name));
+    console.log('Using voice index:', voice);
+    if (voices.length > 0) {
+      speak({ text: 'Hello, this is a test of the speech synthesis system.', voice: voices[voice] });
+    } else {
+      speak({ text: 'Hello, this is a test of the speech synthesis system.' });
     }
   };
 
@@ -130,6 +280,15 @@ const CookingSession: React.FC = () => {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
+      <style>
+        {`
+          @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+          }
+        `}
+      </style>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -197,6 +356,13 @@ const CookingSession: React.FC = () => {
                 >
                   Repeat
                 </Button>
+                <Button
+                  variant="outlined"
+                  onClick={testSpeech}
+                  disabled={loading}
+                >
+                  Test Speech
+                </Button>
               </Box>
             </CardContent>
           </Card>
@@ -212,6 +378,58 @@ const CookingSession: React.FC = () => {
             >
               <Alert severity="info" sx={{ mb: 4 }}>
                 {lastResponse}
+              </Alert>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Wake Word Status Indicator */}
+        {!listening && isWakeWordMode && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <Alert severity="info" sx={{ mb: 4, opacity: 0.7 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <MicIcon />
+                <Typography variant="body2">
+                  Voice assistant starting up... Say "Hey Prep" to activate.
+                </Typography>
+              </Box>
+            </Alert>
+          </motion.div>
+        )}
+
+        {/* Speech Recognition Status */}
+        <AnimatePresence>
+          {listening && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+            >
+              <Alert severity={isWakeWordMode ? "info" : "success"} sx={{ mb: 4 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <MicIcon sx={{ animation: 'pulse 1.5s infinite' }} />
+                  <Typography>
+                    {isWakeWordMode ? (
+                      <>
+                        Listening for "Hey Prep"... {voiceCommand && `"${voiceCommand}"`}
+                        <Typography variant="caption" display="block" sx={{ opacity: 0.8 }}>
+                          Say "Hey Prep" to activate voice commands
+                        </Typography>
+                      </>
+                    ) : (
+                      <>
+                        Listening for command... {voiceCommand && `"${voiceCommand}"`}
+                        <Typography variant="caption" display="block" sx={{ opacity: 0.8 }}>
+                          Will stop automatically after 5 seconds of silence
+                        </Typography>
+                      </>
+                    )}
+                  </Typography>
+                </Box>
               </Alert>
             </motion.div>
           )}
@@ -247,48 +465,18 @@ const CookingSession: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Voice Input Dialog */}
-        <Dialog
-          open={voiceDialogOpen}
-          onClose={() => setVoiceDialogOpen(false)}
-          maxWidth="sm"
-          fullWidth
-        >
-          <DialogTitle>Voice Command</DialogTitle>
-          <DialogContent>
-            <TextField
-              autoFocus
-              margin="dense"
-              label="Command"
-              fullWidth
-              variant="outlined"
-              value={voiceCommand}
-              onChange={(e) => setVoiceCommand(e.target.value)}
-              placeholder="e.g., 'next', 'repeat', 'what prep', 'pause'"
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setVoiceDialogOpen(false)}>Cancel</Button>
-            <Button
-              onClick={() => sendVoiceCommand(voiceCommand)}
-              variant="contained"
-              disabled={loading || !voiceCommand.trim()}
-            >
-              Send Command
-            </Button>
-          </DialogActions>
-        </Dialog>
 
         {/* Floating Action Button */}
         <Fab
-          color="primary"
+          color={isWakeWordMode ? "default" : (listening ? "secondary" : "primary")}
           aria-label="voice command"
           sx={{
             position: 'fixed',
             bottom: 16,
             right: 16,
+            animation: listening ? 'pulse 1.5s infinite' : 'none',
           }}
-          onClick={() => setVoiceDialogOpen(true)}
+          onClick={toggleSpeechRecognition}
         >
           <MicIcon />
         </Fab>
