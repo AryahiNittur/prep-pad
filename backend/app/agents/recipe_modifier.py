@@ -340,3 +340,104 @@ Return the modified recipe in this exact JSON format:
             "dietary_notes": result.modification_notes,
             "serving_size": result.new_servings
         }
+    def missing_ingredients(self, recipe_ingredients: List[Ingredient], available_ingredients: List[AvailableIngredient]) -> List[Ingredient]:
+        """Find ingredients from the recipe that are not available"""
+        available_names = [ing.name.lower().strip() for ing in available_ingredients]
+        missing = []
+        
+        for ingredient in recipe_ingredients:
+            ingredient_name = ingredient.name.lower().strip()
+            if not any(available_name in ingredient_name or ingredient_name in available_name 
+                      for available_name in available_names):
+                missing.append(ingredient)
+        
+        return missing
+
+    def _find_substitutions(self, missing):
+        """Find appropriate substitutions for missing ingredients"""
+        substitutions = []
+        available_names = [ing.name.lower().strip() for ing in available_ingredients]
+        
+        for missing_ing in missing_ingredients:
+            substitution = self._find_single_substitution(
+                missing_ing, available_ingredients, dietary_preferences, substitution_preferences
+            )
+            if substitution:
+                substitutions.append(substitution)
+        
+        return substitutions
+
+    def _find_single_substitution(self, missing_ingredient: Ingredient) -> Optional[IngredientSubstitution]:
+        """Find a single substitution for one missing ingredient"""
+        ingredient_name = missing_ingredient.name.lower().strip()
+        
+        # Check user preferences first
+        for original, substitute in substitution_preferences.items():
+            if original.lower() in ingredient_name:
+                # Find the substitute in available ingredients
+                for available in available_ingredients:
+                    if substitute.lower() in available.name.lower():
+                        return IngredientSubstitution(
+                            original_name=missing_ingredient.name,
+                            original_amount=missing_ingredient.amount or "1",
+                            original_unit=missing_ingredient.unit or "unit",
+                            substitute_name=available.name,
+                            substitute_amount=self._calculate_substitute_amount(missing_ingredient, available),
+                            substitute_unit=available.unit or missing_ingredient.unit or "unit",
+                            substitution_reason="User preference",
+                            substitution_notes=f"Substituted based on user preference: {original} -> {substitute}"
+                        )
+        
+        # Check dietary preferences
+        for dietary in dietary_preferences:
+            if dietary.lower() == "vegetarian" or dietary.lower() == "vegan":
+                meat_substitutes = self.substitution_database.get("meat", [])
+                for substitute in meat_substitutes:
+                    for available in available_ingredients:
+                        if substitute.lower() in available.name.lower():
+                            return IngredientSubstitution(
+                                original_name=missing_ingredient.name,
+                                original_amount=missing_ingredient.amount or "1",
+                                original_unit=missing_ingredient.unit or "unit",
+                                substitute_name=available.name,
+                                substitute_amount=self._calculate_substitute_amount(missing_ingredient, available),
+                                substitute_unit=available.unit or missing_ingredient.unit or "unit",
+                                substitution_reason=f"Dietary preference: {dietary}",
+                                substitution_notes=f"Substituted for {dietary} diet"
+                            )
+        
+        # Check substitution database
+        for category, substitutes in self.substitution_database.items():
+            if category.lower() in ingredient_name:
+                for substitute in substitutes:
+                    for available in available_ingredients:
+                        if substitute.lower() in available.name.lower():
+                            return IngredientSubstitution(
+                                original_name=missing_ingredient.name,
+                                original_amount=missing_ingredient.amount or "1",
+                                original_unit=missing_ingredient.unit or "unit",
+                                substitute_name=available.name,
+                                substitute_amount=self._calculate_substitute_amount(missing_ingredient, available),
+                                substitute_unit=available.unit or missing_ingredient.unit or "unit",
+                                substitution_reason="Ingredient substitution",
+                                substitution_notes=f"Substituted {category} with {substitute}"
+                            )
+        
+        return None
+
+    def _calculate_substitute_amount(self, original: Ingredient, substitute: AvailableIngredient) -> str:
+        """Calculate appropriate amount for substitute ingredient"""
+        # This is a simplified calculation - in practice, you'd want more sophisticated logic
+        if original.amount and substitute.amount:
+            try:
+                # Try to parse amounts and maintain similar ratios
+                orig_amount = float(re.findall(r'\d+\.?\d*', original.amount)[0]) if re.findall(r'\d+\.?\d*', original.amount) else 1
+                sub_amount = float(re.findall(r'\d+\.?\d*', substitute.amount)[0]) if re.findall(r'\d+\.?\d*', substitute.amount) else 1
+                
+                # Use the available amount or scale proportionally
+                return str(min(sub_amount, orig_amount))
+            except:
+                return substitute.amount or "1"
+        
+        return substitute.amount or "1"
+    

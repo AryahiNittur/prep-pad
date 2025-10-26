@@ -377,9 +377,9 @@ class VoiceCookingAssistant:
             response_text += f" and scaled to {servings} servings"
         
         # If there are substitution notes, add them to the response
-        substitution_notes = [ing.get('substitution_note') for ing in adjusted_data['adjusted_ingredients'] if ing.get('substitution_note')]
-        if substitution_notes:
-            response_text += ". Notes: " + "; ".join(substitution_notes)
+        #substitution_notes = [ing.get('substitution_note') for ing in adjusted_data['adjusted_ingredients'] if ing.get('substitution_note')]
+        #if substitution_notes:
+        #    response_text += ". Notes: " + "; ".join(substitution_notes)
         
         return {
             "response": response_text,
