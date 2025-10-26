@@ -20,6 +20,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface TimerProps {
   instruction: string;
   onComplete?: () => void;
+  autoStart?: boolean;
+  shouldPause?: boolean;
+  shouldResume?: boolean;
 }
 
 interface TimerState {
@@ -29,7 +32,7 @@ interface TimerState {
   totalTime: number;
 }
 
-const Timer: React.FC<TimerProps> = ({ instruction, onComplete }) => {
+const Timer: React.FC<TimerProps> = ({ instruction, onComplete, autoStart = false, shouldPause = false, shouldResume = false }) => {
   const [timerState, setTimerState] = useState<TimerState>({
     isActive: false,
     isPaused: false,
@@ -40,50 +43,66 @@ const Timer: React.FC<TimerProps> = ({ instruction, onComplete }) => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Regex patterns to detect time mentions in instructions
-  const timePatterns = [
-    /(\d+)\s*minutes?/gi,
-    /(\d+)\s*mins?/gi,
-    /(\d+)\s*min/gi,
-    /for\s*(\d+)\s*minutes?/gi,
-    /cook\s*for\s*(\d+)\s*minutes?/gi,
-    /bake\s*for\s*(\d+)\s*minutes?/gi,
-    /simmer\s*for\s*(\d+)\s*minutes?/gi,
-    /boil\s*for\s*(\d+)\s*minutes?/gi,
-  ];
+  // Initialize timer when instruction changes
+  useEffect(() => {
+    // Regex patterns to detect time mentions in instructions
+    const timePatterns = [
+      /(\d+)\s*minutes?/gi,
+      /(\d+)\s*mins?/gi,
+      /(\d+)\s*min/gi,
+      /for\s*(\d+)\s*minutes?/gi,
+      /cook\s*for\s*(\d+)\s*minutes?/gi,
+      /bake\s*for\s*(\d+)\s*minutes?/gi,
+      /simmer\s*for\s*(\d+)\s*minutes?/gi,
+      /boil\s*for\s*(\d+)\s*minutes?/gi,
+    ];
 
-  // Extract time from instruction text
-  const extractTimeFromInstruction = (text: string): number | null => {
-    for (const pattern of timePatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        const timeStr = match[1] || match[0].match(/\d+/)?.[0];
-        if (timeStr) {
-          const time = parseInt(timeStr, 10);
-          if (time > 0 && time <= 300) { // Reasonable cooking time range (0-5 hours)
-            return time;
+    const extractTime = (text: string): number | null => {
+      for (const pattern of timePatterns) {
+        const match = text.match(pattern);
+        if (match) {
+          const timeStr = match[1] || match[0].match(/\d+/)?.[0];
+          if (timeStr) {
+            const time = parseInt(timeStr, 10);
+            if (time > 0 && time <= 300) {
+              return time;
+            }
           }
         }
       }
-    }
-    return null;
-  };
+      return null;
+    };
 
-  // Initialize timer when instruction changes
-  useEffect(() => {
-    const timeInMinutes = extractTimeFromInstruction(instruction);
+    const timeInMinutes = extractTime(instruction);
     if (timeInMinutes) {
       setShowTimer(true);
       setTimerState({
         isActive: false,
         isPaused: false,
-        timeLeft: timeInMinutes * 60, // Convert to seconds
+        timeLeft: timeInMinutes * 60,
         totalTime: timeInMinutes * 60,
       });
     } else {
       setShowTimer(false);
     }
   }, [instruction]);
+
+  // Handle auto-start timer
+  useEffect(() => {
+    if (autoStart && timerState.totalTime > 0 && !timerState.isActive) {
+      setTimerState(prev => ({ ...prev, isActive: true, isPaused: false }));
+    }
+  }, [autoStart, timerState.totalTime, timerState.isActive]);
+
+  // Handle pause/resume from voice commands
+  useEffect(() => {
+    if (shouldPause && timerState.isActive && !timerState.isPaused) {
+      setTimerState(prev => ({ ...prev, isPaused: true }));
+    }
+    if (shouldResume && timerState.isActive && timerState.isPaused) {
+      setTimerState(prev => ({ ...prev, isPaused: false }));
+    }
+  }, [shouldPause, shouldResume, timerState.isActive, timerState.isPaused]);
 
   // Timer countdown logic
   useEffect(() => {
@@ -156,6 +175,10 @@ const Timer: React.FC<TimerProps> = ({ instruction, onComplete }) => {
   };
 
   const stopTimer = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
     setTimerState(prev => ({
       ...prev,
       isActive: false,
@@ -249,12 +272,14 @@ const Timer: React.FC<TimerProps> = ({ instruction, onComplete }) => {
             </Box>
 
             {timerState.timeLeft === 0 && timerState.isActive === false && (
+              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
               <Alert severity="success" sx={{ mt: 2 }}>
                 <Typography variant="h6">⏰ Time's up!</Typography>
                 <Typography variant="body2">
                   The timer has completed. You can proceed to the next step.
                 </Typography>
               </Alert>
+              </Box>
             )}
           </CardContent>
         </Card>
