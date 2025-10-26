@@ -95,8 +95,21 @@ class RecipeModifier:
         dietary = ", ".join(dietary_preferences) if dietary_preferences else "None"
         user_prefs = "\n".join([f"{k}: {v}" for k, v in substitution_preferences.items()]) if substitution_preferences else "None"
 
+        # Determine if we need to replace ingredients for dietary restrictions
+        dietary_instruction = ""
+        if dietary_preferences:
+            dietary_instruction = f"""
+IMPORTANT: This recipe needs to be modified for the following dietary restrictions: {dietary}
+- For VEGAN: Replace ALL animal products (meat, dairy, eggs, honey, etc.) with plant-based alternatives
+- For VEGETARIAN: Replace ALL meat products with vegetarian alternatives
+- For GLUTEN-FREE: Replace ALL gluten-containing ingredients (wheat flour, breadcrumbs, etc.)
+- For DAIRY-FREE: Replace ALL dairy products (milk, cheese, butter, cream, etc.)
+
+You MUST suggest substitutions for ALL ingredients that violate the dietary restrictions, not just missing ingredients.
+"""
+
         return f"""
-You are a culinary expert. Given the following recipe ingredients and available ingredients, suggest substitutions for any missing ingredients.
+You are a culinary expert. Given the following recipe ingredients, suggest substitutions to make this recipe compliant with dietary restrictions.
 - Recipe Ingredients:
 {recipe_ings}
 - Available Ingredients:
@@ -104,8 +117,9 @@ You are a culinary expert. Given the following recipe ingredients and available 
 - Dietary Preferences: {dietary}
 - User Substitution Preferences:
 {user_prefs}
+{dietary_instruction}
 
-For each missing ingredient, suggest a substitution using only available ingredients and respecting dietary/user preferences.
+For each ingredient that needs substitution (either missing or violating dietary restrictions), suggest appropriate alternatives.
 Return a JSON list in this format:
 {{
   "substitutions": [
@@ -181,6 +195,9 @@ MODIFICATIONS REQUIRED:
 
 4. Dietary Preferences: {', '.join(dietary_preferences) if dietary_preferences else 'None'}
 
+CRITICAL DIETARY RESTRICTIONS:
+{self._get_dietary_restrictions_instructions(dietary_preferences)}
+
 INSTRUCTIONS:
 1. Apply all ingredient substitutions listed above
 2. Adjust cooking instructions to work with substituted ingredients
@@ -189,6 +206,7 @@ INSTRUCTIONS:
 5. Ensure the recipe maintains its core flavor profile and cooking method
 6. Update timing estimates if needed
 7. Add notes about any significant changes
+8. CRITICAL: Ensure ALL ingredients comply with dietary restrictions - NO EXCEPTIONS
 
 Return the modified recipe in this exact JSON format:
 {{
@@ -316,6 +334,48 @@ Return the modified recipe in this exact JSON format:
         if dietary_preferences:
             notes.append(f"Applied dietary preferences: {', '.join(dietary_preferences)}")
         return "\n".join(notes) if notes else "No modifications applied"
+
+    def _get_dietary_restrictions_instructions(self, dietary_preferences: List[str]) -> str:
+        """Get specific instructions for dietary restrictions"""
+        if not dietary_preferences:
+            return "No dietary restrictions."
+        
+        instructions = []
+        for preference in dietary_preferences:
+            pref_lower = preference.lower()
+            if pref_lower == "vegan":
+                instructions.append("""
+VEGAN RESTRICTIONS (STRICT - NO EXCEPTIONS):
+- NO meat, poultry, fish, seafood, or any animal flesh
+- NO dairy products (milk, cheese, butter, cream, yogurt, etc.)
+- NO eggs or egg products
+- NO honey or bee products
+- NO animal-derived ingredients (gelatin, lard, etc.)
+- ONLY plant-based ingredients allowed
+- Use plant-based alternatives: tofu, tempeh, plant milk, vegan butter, etc.
+""")
+            elif pref_lower == "vegetarian":
+                instructions.append("""
+VEGETARIAN RESTRICTIONS:
+- NO meat, poultry, fish, seafood, or any animal flesh
+- Dairy and eggs are allowed
+- Use vegetarian alternatives: tofu, tempeh, beans, lentils, etc.
+""")
+            elif pref_lower == "gluten-free":
+                instructions.append("""
+GLUTEN-FREE RESTRICTIONS:
+- NO wheat, barley, rye, or any gluten-containing grains
+- NO breadcrumbs, flour, or gluten-containing ingredients
+- Use gluten-free alternatives: rice flour, almond flour, gluten-free breadcrumbs, etc.
+""")
+            elif pref_lower == "dairy-free":
+                instructions.append("""
+DAIRY-FREE RESTRICTIONS:
+- NO milk, cheese, butter, cream, yogurt, or any dairy products
+- Use dairy-free alternatives: plant milk, vegan cheese, coconut oil, etc.
+""")
+        
+        return "\n".join(instructions) if instructions else "No dietary restrictions."
 
     def adjust_recipe_for_dietary_needs(self, recipe: OptimizedRecipe, dietary_preference: str, servings: int = None) -> Dict[str, Any]:
         """

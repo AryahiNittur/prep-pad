@@ -48,6 +48,20 @@ class VoiceCookingAssistant:
             return self._handle_resume_timer(session)
         elif command in ['ingredients', 'what ingredients']:
             return self._handle_ingredients_query(recipe)
+        elif command in ['make vegetarian', 'vegetarian version', 'make it vegetarian', 'vegetarian']:
+            return self._handle_make_vegetarian(session, recipe, db)
+        elif command in ['make vegan', 'vegan version', 'make it vegan', 'vegan']:
+            return self._handle_make_vegan(session, recipe, db)
+        elif command in ['make gluten free', 'gluten free version', 'make it gluten free', 'gluten free', 'gluten-free']:
+            return self._handle_make_gluten_free(session, recipe, db)
+        elif command in ['make dairy free', 'dairy free version', 'make it dairy free', 'dairy free', 'dairy-free']:
+            return self._handle_make_dairy_free(session, recipe, db)
+        elif command in ['scale up', 'double recipe', 'make more']:
+            return self._handle_scale_recipe(session, recipe, db, 2.0)
+        elif command in ['scale down', 'half recipe', 'make less']:
+            return self._handle_scale_recipe(session, recipe, db, 0.5)
+        elif command in ['substitute', 'replace ingredient', 'swap ingredient']:
+            return self._handle_substitute_ingredient(session, recipe, db)
         else:
             return self._handle_unknown_command(command)
     
@@ -261,15 +275,16 @@ class VoiceCookingAssistant:
             ingredient_name = remove_match.group(1).strip()
             return self._handle_ingredient_removal(recipe, ingredient_name, db)
 
-        # Handle dietary and serving adjustments
+        # Handle dietary adjustments using new methods
         if any(keyword in command_lower for keyword in ['vegan', 'vegetarian', 'gluten-free', 'dairy-free']):
-            dietary_pref = next((pref for pref in ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'] 
-                               if pref in command_lower), None)
-            servings = None
-            serving_match = re.search(r'(\d+)\s*(?:serving|people|person|servings)', command_lower)
-            if serving_match:
-                servings = int(serving_match.group(1))
-            return self._handle_dietary_adjustment(recipe, dietary_pref, servings, db)
+            if 'vegan' in command_lower:
+                return self._handle_make_vegan(session, recipe, db)
+            elif 'vegetarian' in command_lower:
+                return self._handle_make_vegetarian(session, recipe, db)
+            elif 'gluten-free' in command_lower or 'gluten free' in command_lower:
+                return self._handle_make_gluten_free(session, recipe, db)
+            elif 'dairy-free' in command_lower or 'dairy free' in command_lower:
+                return self._handle_make_dairy_free(session, recipe, db)
 
         # Check for serving size adjustments
         elif any(keyword in command_lower for keyword in ['adjust', 'change', 'scale', 'serving', 'double', 'half']):
@@ -388,6 +403,182 @@ class VoiceCookingAssistant:
             "success": True
         }
 
+    def _handle_make_vegetarian(self, session: CookingSession, recipe: OptimizedRecipe, db: Session) -> Dict[str, Any]:
+        """Create a vegetarian version of the current recipe"""
+        try:
+            modification_request = {
+                "available_ingredients": [],
+                "target_servings": recipe.servings,
+                "dietary_preferences": ["vegetarian"],
+                "substitution_preferences": {}
+            }
+            
+            modification_result = self.recipe_modifier.modify_recipe(recipe, modification_request)
+            
+            # Save the modified recipe as a new recipe
+            new_recipe_id = self._save_modified_recipe(modification_result.modified_recipe, db, "vegetarian")
+            
+            return {
+                "response": f"I've created a vegetarian version of {recipe.title}. The new recipe has been saved with ID {new_recipe_id}.",
+                "new_recipe_id": new_recipe_id,
+                "modified_recipe": modification_result.modified_recipe,
+                "modification_notes": modification_result.modification_notes,
+                "success": True
+            }
+        except Exception as e:
+            return {
+                "response": f"Sorry, I couldn't create a vegetarian version: {str(e)}",
+                "success": False
+            }
+    
+    def _handle_make_vegan(self, session: CookingSession, recipe: OptimizedRecipe, db: Session) -> Dict[str, Any]:
+        """Create a vegan version of the current recipe"""
+        try:
+            modification_request = {
+                "available_ingredients": [],
+                "target_servings": recipe.servings,
+                "dietary_preferences": ["vegan"],
+                "substitution_preferences": {}
+            }
+            
+            modification_result = self.recipe_modifier.modify_recipe(recipe, modification_request)
+            
+            # Save the modified recipe as a new recipe
+            new_recipe_id = self._save_modified_recipe(modification_result.modified_recipe, db, "vegan")
+            
+            return {
+                "response": f"I've created a vegan version of {recipe.title}. The new recipe has been saved with ID {new_recipe_id}.",
+                "new_recipe_id": new_recipe_id,
+                "modified_recipe": modification_result.modified_recipe,
+                "modification_notes": modification_result.modification_notes,
+                "success": True
+            }
+        except Exception as e:
+            return {
+                "response": f"Sorry, I couldn't create a vegan version: {str(e)}",
+                "success": False
+            }
+    
+    def _handle_make_gluten_free(self, session: CookingSession, recipe: OptimizedRecipe, db: Session) -> Dict[str, Any]:
+        """Create a gluten-free version of the current recipe"""
+        try:
+            modification_request = {
+                "available_ingredients": [],
+                "target_servings": recipe.servings,
+                "dietary_preferences": ["gluten-free"],
+                "substitution_preferences": {}
+            }
+            
+            modification_result = self.recipe_modifier.modify_recipe(recipe, modification_request)
+            
+            # Save the modified recipe as a new recipe
+            new_recipe_id = self._save_modified_recipe(modification_result.modified_recipe, db, "gluten-free")
+            
+            return {
+                "response": f"I've created a gluten-free version of {recipe.title}. The new recipe has been saved with ID {new_recipe_id}.",
+                "new_recipe_id": new_recipe_id,
+                "modified_recipe": modification_result.modified_recipe,
+                "modification_notes": modification_result.modification_notes,
+                "success": True
+            }
+        except Exception as e:
+            return {
+                "response": f"Sorry, I couldn't create a gluten-free version: {str(e)}",
+                "success": False
+            }
+    
+    def _handle_make_dairy_free(self, session: CookingSession, recipe: OptimizedRecipe, db: Session) -> Dict[str, Any]:
+        """Create a dairy-free version of the current recipe"""
+        try:
+            modification_request = {
+                "available_ingredients": [],
+                "target_servings": recipe.servings,
+                "dietary_preferences": ["dairy-free"],
+                "substitution_preferences": {}
+            }
+            
+            modification_result = self.recipe_modifier.modify_recipe(recipe, modification_request)
+            
+            # Save the modified recipe as a new recipe
+            new_recipe_id = self._save_modified_recipe(modification_result.modified_recipe, db, "dairy-free")
+            
+            return {
+                "response": f"I've created a dairy-free version of {recipe.title}. The new recipe has been saved with ID {new_recipe_id}.",
+                "new_recipe_id": new_recipe_id,
+                "modified_recipe": modification_result.modified_recipe,
+                "modification_notes": modification_result.modification_notes,
+                "success": True
+            }
+        except Exception as e:
+            return {
+                "response": f"Sorry, I couldn't create a dairy-free version: {str(e)}",
+                "success": False
+            }
+    
+    def _handle_scale_recipe(self, session: CookingSession, recipe: OptimizedRecipe, db: Session, scale_factor: float) -> Dict[str, Any]:
+        """Scale the recipe up or down"""
+        try:
+            new_servings = int(recipe.servings * scale_factor) if recipe.servings else int(4 * scale_factor)
+            
+            modification_request = {
+                "available_ingredients": [],
+                "target_servings": new_servings,
+                "dietary_preferences": [],
+                "substitution_preferences": {}
+            }
+            
+            modification_result = self.recipe_modifier.modify_recipe(recipe, modification_request)
+            
+            # Save the modified recipe as a new recipe
+            new_recipe_id = self._save_modified_recipe(modification_result.modified_recipe, db, f"scaled_{scale_factor}x")
+            
+            return {
+                "response": f"I've scaled the recipe to {new_servings} servings. The new recipe has been saved with ID {new_recipe_id}.",
+                "new_recipe_id": new_recipe_id,
+                "modified_recipe": modification_result.modified_recipe,
+                "modification_notes": modification_result.modification_notes,
+                "success": True
+            }
+        except Exception as e:
+            return {
+                "response": f"Sorry, I couldn't scale the recipe: {str(e)}",
+                "success": False
+            }
+    
+    def _handle_substitute_ingredient(self, session: CookingSession, recipe: OptimizedRecipe, db: Session) -> Dict[str, Any]:
+        """Handle ingredient substitution requests"""
+        return {
+            "response": "To substitute ingredients, please specify which ingredient you'd like to replace and what you'd like to use instead. For example: 'replace chicken with tofu'.",
+            "success": False
+        }
+    
+    def _save_modified_recipe(self, modified_recipe: OptimizedRecipe, db: Session, modification_type: str) -> int:
+        """Save a modified recipe as a new recipe in the database"""
+        from backend.app.models.models import Recipe
+        import json
+        
+        # Create new recipe entry
+        new_recipe = Recipe(
+            title=f"{modified_recipe.title} ({modification_type.title()})",
+            source_url="voice_modified",
+            original_recipe=json.dumps({"title": modified_recipe.title, "modification_type": modification_type}),
+            prep_phase=json.dumps([step.dict() for step in modified_recipe.prep_phase]),
+            cook_phase=json.dumps([step.dict() for step in modified_recipe.cook_phase]),
+            ingredients=json.dumps([ing.dict() for ing in modified_recipe.ingredients]),
+            total_time=modified_recipe.total_time,
+            prep_time=modified_recipe.prep_time,
+            cook_time=modified_recipe.cook_time,
+            servings=modified_recipe.servings,
+            difficulty=modified_recipe.difficulty,
+            user_id="default_user"
+        )
+        
+        db.add(new_recipe)
+        db.commit()
+        db.refresh(new_recipe)
+        
+        return new_recipe.id
+
     def _handle_serving_adjustment(self, recipe: OptimizedRecipe, command: str, db: Session) -> Dict[str, Any]:
         """Handle serving size adjustments"""
         command_lower = command.lower()
@@ -420,31 +611,6 @@ class VoiceCookingAssistant:
             }
     
     
-    def process_voice_command(self, command: str, session: CookingSession, 
-        recipe: OptimizedRecipe, db: Session) -> Dict[str, Any]:
-   
-        command_lower = command.lower().strip()
-    
-        # Handle dietary and serving adjustments
-        if any(keyword in command_lower for keyword in ['vegan', 'vegetarian', 'gluten-free', 'dairy-free']):
-            dietary_pref = next((pref for pref in ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'] 
-                               if pref in command_lower), None)
-            servings = None
-            
-            # Check for serving size changes
-            serving_match = re.search(r'(\d+)\s*(?:serving|people|person|servings)', command_lower)
-            if serving_match:
-                servings = int(serving_match.group(1))
-            
-            return self._handle_dietary_adjustment(recipe, dietary_pref, servings, db)
-            
-        # Check for serving size adjustments
-        elif any(keyword in command_lower for keyword in ['adjust', 'change', 'scale', 'serving', 'double', 'half']):
-            return self._handle_serving_adjustment(recipe, command, db)
-            
-        # Handle existing commands
-        else:
-            return self._process_voice_command(command, session, recipe, db)
         
     def apply_adjusted_recipe(self, recipe: OptimizedRecipe, adjusted_data: dict) -> OptimizedRecipe:
    

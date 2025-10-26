@@ -17,6 +17,7 @@ import {
   Mic as MicIcon,
   Kitchen as KitchenIcon,
   Timer as TimerIcon,
+  Restaurant as RestaurantIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams } from 'react-router-dom';
@@ -46,6 +47,7 @@ const CookingSession: React.FC = () => {
   const [first, setFirst] = useState(true);
   const [voiceCommand, setVoiceCommand] = useState('');
   const [lastResponse, setLastResponse] = useState<string | null>(null);
+  const [newRecipeCreated, setNewRecipeCreated] = useState<{id: number, title: string} | null>(null);
 
   const [isWakeWordMode, setIsWakeWordMode] = useState(false);
   const isWakeWordModeRef = useRef(isWakeWordMode);
@@ -204,6 +206,14 @@ const CookingSession: React.FC = () => {
       const voiceResponse: VoiceResponse = response.data;
       setLastResponse(voiceResponse.response);
       
+      // Check if a new recipe was created
+      if ((voiceResponse as any).new_recipe_id && (voiceResponse as any).success) {
+        setNewRecipeCreated({
+          id: (voiceResponse as any).new_recipe_id,
+          title: (voiceResponse as any).modified_recipe?.title || 'Modified Recipe'
+        });
+      }
+      
       // Update session if provided
       const stepChanged = voiceResponse.current_step && 
                          (voiceResponse.current_step !== session?.current_step);
@@ -288,6 +298,12 @@ const CookingSession: React.FC = () => {
     { command: 'repeat', label: 'Repeat', icon: <RepeatIcon /> },
     { command: 'what prep', label: 'What Prep?', icon: <KitchenIcon /> },
     { command: 'time', label: 'Time Left', icon: <TimerIcon /> },
+    { command: 'make vegetarian', label: 'Make Vegetarian', icon: <RestaurantIcon /> },
+    { command: 'make vegan', label: 'Make Vegan', icon: <RestaurantIcon /> },
+    { command: 'make gluten free', label: 'Make Gluten-Free', icon: <RestaurantIcon /> },
+    { command: 'make dairy free', label: 'Make Dairy-Free', icon: <RestaurantIcon /> },
+    { command: 'scale up', label: 'Double Recipe', icon: <KitchenIcon /> },
+    { command: 'scale down', label: 'Half Recipe', icon: <KitchenIcon /> },
   ];
 
   if (!session) {
@@ -405,6 +421,41 @@ const CookingSession: React.FC = () => {
           )}
         </AnimatePresence>
         */}
+
+        {/* New Recipe Created Notification */}
+        <AnimatePresence>
+          {newRecipeCreated && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <Alert 
+                severity="success" 
+                sx={{ mb: 4 }}
+                action={
+                  <Button
+                    color="inherit"
+                    size="small"
+                    onClick={() => {
+                      window.open(`/recipes`, '_blank');
+                      setNewRecipeCreated(null);
+                    }}
+                  >
+                    View Recipe
+                  </Button>
+                }
+              >
+                <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+                  New Recipe Created!
+                </Typography>
+                <Typography variant="body2">
+                  "{newRecipeCreated.title}" has been saved to your recipe library.
+                </Typography>
+              </Alert>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Wake Word Status Indicator */}
         {!listening && isWakeWordMode && (
