@@ -51,3 +51,34 @@ class CookingSessionResponse(BaseModel):
     current_phase: Optional[str] = None
     is_active: bool
     started_at: datetime
+
+class AvailableIngredient(BaseModel):
+    name: str
+    amount: Optional[str] = None
+    unit: Optional[str] = None
+    notes: Optional[str] = None
+
+class RecipeModificationRequest(BaseModel):
+    recipe_id: int
+    available_ingredients: List[AvailableIngredient]
+    target_servings: Optional[int] = None
+    dietary_preferences: Optional[List[str]] = None  # e.g., ["vegetarian", "gluten-free"]
+    substitution_preferences: Optional[Dict[str, str]] = None  # {"meat": "tofu", "butter": "olive oil"}
+
+class IngredientSubstitution(BaseModel):
+    original_name: str
+    original_amount: str
+    original_unit: str
+    substitute_name: str
+    substitute_amount: str
+    substitute_unit: str
+    substitution_reason: str
+    substitution_notes: Optional[str] = None
+
+class RecipeModificationResponse(BaseModel):
+    modified_recipe: OptimizedRecipe
+    substitutions_made: List[IngredientSubstitution]
+    scaling_applied: Optional[Dict[str, Any]] = None
+    modification_notes: str
+    original_servings: int
+    new_servings: int

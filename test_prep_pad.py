@@ -17,15 +17,15 @@ def test_server_health():
             print(f"✅ Server is running: {data['message']}")
             return True
         else:
-            print(f"❌ Server error: {response.status_code}")
+            print(f" Server error: {response.status_code}")
             return False
     except requests.exceptions.ConnectionError:
-        print("❌ Server is not running. Start it with: python run_server.py")
+        print(" Server is not running. Start it with: python run_server.py")
         return False
 
 def test_recipe_parsing():
     """Test recipe parsing functionality"""
-    print("\n🧪 Testing recipe parsing...")
+    print("\n Testing recipe parsing...")
     
     # Test with a simple recipe URL
     test_url = "https://www.allrecipes.com/recipe/213742/cheesy-chicken-broccoli-casserole/"
@@ -70,7 +70,7 @@ def test_get_recipes():
             print(f"❌ Get recipes failed: {response.status_code}")
             return False
     except Exception as e:
-        print(f"❌ Get recipes error: {str(e)}")
+        print(f" Get recipes error: {str(e)}")
         return False
 
 def test_cooking_session():
@@ -90,11 +90,11 @@ def test_cooking_session():
             print(f"   Phase: {session['current_phase']}")
             return session['session_id']
         else:
-            print(f"❌ Start cooking session failed: {response.status_code}")
+            print(f" Start cooking session failed: {response.status_code}")
             print(f"   Error: {response.text}")
             return None
     except Exception as e:
-        print(f"❌ Cooking session error: {str(e)}")
+        print(f"Cooking session error: {str(e)}")
         return None
 
 def test_voice_commands(session_id):
@@ -118,9 +118,9 @@ def test_voice_commands(session_id):
                 result = response.json()
                 print(f"✅ '{cmd}': {result['response'][:50]}...")
             else:
-                print(f"❌ '{cmd}' failed: {response.status_code}")
+                print(f" '{cmd}' failed: {response.status_code}")
         except Exception as e:
-            print(f"❌ '{cmd}' error: {str(e)}")
+            print(f" '{cmd}' error: {str(e)}")
 
 def main():
     """Run all tests"""

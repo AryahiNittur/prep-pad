@@ -6,6 +6,7 @@ import os
 import re
 from dotenv import load_dotenv
 from typing import Optional, Dict, Any
+from .recipe_modifier import RecipeModifier
 
 load_dotenv()
 
@@ -16,6 +17,7 @@ class VoiceCookingAssistant:
             temperature=0.3,
             openai_api_key=os.getenv("OPENAI_API_KEY")
         )
+        self.recipe_modifier = RecipeModifier()
     
     def process_voice_command(self, command: str, session: CookingSession, 
                             recipe: OptimizedRecipe, db: Session) -> Dict[str, Any]:
@@ -311,3 +313,103 @@ class VoiceCookingAssistant:
             result["timer_message"] = f"This step requires {timer_minutes} minute{'s' if timer_minutes != 1 else ''}. A timer will be available to help you track the time."
         
         return result
+
+    def _handle_dietary_adjustment(self, recipe: OptimizedRecipe, dietary_pref: str, servings: Optional[int], db: Session) -> Dict[str, Any]:
+        """Handle dietary preference adjustments"""
+        # Get adjusted recipe from the recipe modifier
+        adjusted_data = self.recipe_modifier.adjust_recipe_for_dietary_needs(recipe, dietary_pref, servings)
+        
+        # Apply the adjustments to the recipe
+        updated_recipe = self.apply_adjusted_recipe(recipe, adjusted_data)
+        
+        # Prepare response
+        response_text = f"Recipe adjusted for {dietary_pref}"
+        if servings:
+            response_text += f" and scaled to {servings} servings"
+        
+        # If there are substitution notes, add them to the response
+        substitution_notes = [ing.get('substitution_note') for ing in adjusted_data['adjusted_ingredients'] if ing.get('substitution_note')]
+        if substitution_notes:
+            response_text += ". Notes: " + "; ".join(substitution_notes)
+        
+        return {
+            "response": response_text,
+            "recipe": updated_recipe,
+            "dietary_notes": adjusted_data.get('dietary_notes', ""),
+            "success": True
+        }
+
+    def _handle_serving_adjustment(self, recipe: OptimizedRecipe, command: str, db: Session) -> Dict[str, Any]:
+        """Handle serving size adjustments"""
+        command_lower = command.lower()
+        new_servings = None
+        
+        # Check for specific serving numbers
+        serving_match = re.search(r'(\d+)\s*(?:serving|people|person|servings)', command_lower)
+        if serving_match:
+            new_servings = int(serving_match.group(1))
+        # Check for double/half adjustments
+        elif 'double' in command_lower:
+            new_servings = recipe.servings * 2
+        elif 'half' in command_lower:
+            new_servings = max(1, recipe.servings // 2)
+            
+        if new_servings:
+            # Get adjusted recipe from the recipe modifier
+            adjusted_data = self.recipe_modifier.adjust_recipe_for_dietary_needs(recipe, None, new_servings)
+            updated_recipe = self.apply_adjusted_recipe(recipe, adjusted_data)
+            
+            return {
+                "response": f"Recipe adjusted for {new_servings} servings",
+                "recipe": updated_recipe,
+                "success": True
+            }
+        else:
+            return {
+                "response": "I couldn't determine how to adjust the serving size. Please specify a number of servings or say 'double' or 'half'.",
+                "success": False
+            }
+    
+    
+    def process_voice_command(self, command: str, session: CookingSession, 
+        recipe: OptimizedRecipe, db: Session) -> Dict[str, Any]:
+   
+        command_lower = command.lower().strip()
+    
+        # Handle dietary and serving adjustments
+        if any(keyword in command_lower for keyword in ['vegan', 'vegetarian', 'gluten-free', 'dairy-free']):
+            dietary_pref = next((pref for pref in ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'] 
+                               if pref in command_lower), None)
+            servings = None
+            
+            # Check for serving size changes
+            serving_match = re.search(r'(\d+)\s*(?:serving|people|person|servings)', command_lower)
+            if serving_match:
+                servings = int(serving_match.group(1))
+            
+            return self._handle_dietary_adjustment(recipe, dietary_pref, servings, db)
+            
+        # Check for serving size adjustments
+        elif any(keyword in command_lower for keyword in ['adjust', 'change', 'scale', 'serving', 'double', 'half']):
+            return self._handle_serving_adjustment(recipe, command, db)
+            
+        # Handle existing commands
+        elif command_lower in ['next', 'next step', 'continue']:
+            return self._handle_next_step(session, recipe, db)
+        else:
+            return self._handle_unknown_command(command)
+        
+    def apply_adjusted_recipe(self, recipe: OptimizedRecipe, adjusted_data: dict) -> OptimizedRecipe:
+   
+    # Update ingredients
+     for adj_ing in adjusted_data['adjusted_ingredients']:
+        for ing in recipe.ingredients:
+            if ing.name.lower() == adj_ing['name'].lower():
+                ing.amount = adj_ing['amount']
+                ing.unit = adj_ing['unit']
+    
+    # Update servings if provided
+     if 'serving_size' in adjusted_data:
+        recipe.servings = adjusted_data['serving_size']
+    
+        return recipe
