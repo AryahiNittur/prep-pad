@@ -46,7 +46,6 @@ const CookingSession: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [first, setFirst] = useState(true);
   const [voiceCommand, setVoiceCommand] = useState('');
-  const [lastResponse, setLastResponse] = useState<string | null>(null);
   const [newRecipeCreated, setNewRecipeCreated] = useState<{id: number, title: string} | null>(null);
 
   const [isWakeWordMode, setIsWakeWordMode] = useState(false);
@@ -204,7 +203,6 @@ const CookingSession: React.FC = () => {
       });
 
       const voiceResponse: VoiceResponse = response.data;
-      setLastResponse(voiceResponse.response);
       
       // Check if a new recipe was created
       if ((voiceResponse as any).new_recipe_id && (voiceResponse as any).success) {

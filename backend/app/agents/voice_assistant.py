@@ -36,7 +36,7 @@ class VoiceCookingAssistant:
             return self._handle_pause(session, db)
         elif command in ['resume', 'continue cooking']:
             return self._handle_resume(session, db)
-        elif command in ['time', 'how long', 'timer']:
+        elif command in ['time', 'how long', 'time left']:
             return self._handle_time_query(session, recipe)
         elif command in ['timer info', 'timer help']:
             return self._handle_timer_info(session, recipe)
@@ -291,10 +291,8 @@ class VoiceCookingAssistant:
             return self._handle_serving_adjustment(recipe, command, db)
 
         # Handle existing commands
-        elif command_lower in ['next', 'next step', 'continue']:
-            return self._handle_next_step(session, recipe, db)
         else:
-            return self._handle_unknown_command(command)
+            return self._process_voice_command(command, session, recipe, db)
     
     def _handle_unknown_command(self, command: str) -> Dict[str, Any]:
         """Handle unknown commands"""
@@ -419,7 +417,7 @@ class VoiceCookingAssistant:
             new_recipe_id = self._save_modified_recipe(modification_result.modified_recipe, db, "vegetarian")
             
             return {
-                "response": f"I've created a vegetarian version of {recipe.title}. The new recipe has been saved with ID {new_recipe_id}.",
+                "response": f"I've created a vegetarian version of {recipe.title}. The new recipe has been saved.",
                 "new_recipe_id": new_recipe_id,
                 "modified_recipe": modification_result.modified_recipe,
                 "modification_notes": modification_result.modification_notes,
