@@ -231,6 +231,55 @@ class VoiceCookingAssistant:
             "current_step": session.current_step,
             "current_phase": session.current_phase
         }
+
+    def _handle_ingredient_removal(self, recipe: OptimizedRecipe, ingredient_name: str, db: Session) -> Dict[str, Any]:
+        """
+        Use OpenAI to analyze the impact of removing an ingredient and suggest replacements or adjustments.
+        """
+        # Compose a prompt for OpenAI
+        prompt = (
+            f"You are a cooking assistant. The user wants to remove '{ingredient_name}' from this recipe:\n"
+            f"Ingredients: {[f'{ing.amount} {ing.unit} {ing.name}' for ing in recipe.ingredients]}\n"
+            f"Instructions: {[step.instruction for step in recipe.prep_phase + recipe.cook_phase]}\n"
+            "What will happen to the recipe if this ingredient is removed? Suggest any replacements or adjustments needed. "
+            "Also, mention if the servings or outcome will be affected."
+        )
+        # Get response from OpenAI
+        response = self.llm.invoke(prompt)
+        return {
+            "response": response.content,
+            "voice": True  # Indicate this should be read aloud
+        }
+
+    def process_voice_command(self, command: str, session: CookingSession, 
+        recipe: OptimizedRecipe, db: Session) -> Dict[str, Any]:
+        command_lower = command.lower().strip()
+
+        # Ingredient removal intent
+        remove_match = re.search(r'remove (.+?)(?: from|$)', command_lower)
+        if remove_match:
+            ingredient_name = remove_match.group(1).strip()
+            return self._handle_ingredient_removal(recipe, ingredient_name, db)
+
+        # Handle dietary and serving adjustments
+        if any(keyword in command_lower for keyword in ['vegan', 'vegetarian', 'gluten-free', 'dairy-free']):
+            dietary_pref = next((pref for pref in ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'] 
+                               if pref in command_lower), None)
+            servings = None
+            serving_match = re.search(r'(\d+)\s*(?:serving|people|person|servings)', command_lower)
+            if serving_match:
+                servings = int(serving_match.group(1))
+            return self._handle_dietary_adjustment(recipe, dietary_pref, servings, db)
+
+        # Check for serving size adjustments
+        elif any(keyword in command_lower for keyword in ['adjust', 'change', 'scale', 'serving', 'double', 'half']):
+            return self._handle_serving_adjustment(recipe, command, db)
+
+        # Handle existing commands
+        elif command_lower in ['next', 'next step', 'continue']:
+            return self._handle_next_step(session, recipe, db)
+        else:
+            return self._handle_unknown_command(command)
     
     def _handle_unknown_command(self, command: str) -> Dict[str, Any]:
         """Handle unknown commands"""
