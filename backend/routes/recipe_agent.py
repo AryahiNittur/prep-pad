@@ -202,9 +202,11 @@ def process_voice_command(request: VoiceCommandRequest, db: Session = Depends(ge
         raise HTTPException(status_code=400, detail=f"Failed to parse recipe data: {str(e)}")
     
     # Process the voice command
+    print(f'\n\n{request.command}\n\n')
     response = voice_assistant.process_voice_command(
         request.command, session, optimized_recipe, db
     )
+    print(f'\n\n{response}\n\n')
     
     # Log the voice command
     voice_cmd = VoiceCommand(

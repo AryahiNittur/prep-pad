@@ -19,7 +19,7 @@ class VoiceCookingAssistant:
         )
         self.recipe_modifier = RecipeModifier()
     
-    def process_voice_command(self, command: str, session: CookingSession, 
+    def _process_voice_command(self, command: str, session: CookingSession, 
                             recipe: OptimizedRecipe, db: Session) -> Dict[str, Any]:
         """
         Process voice commands and return appropriate responses
@@ -394,10 +394,8 @@ class VoiceCookingAssistant:
             return self._handle_serving_adjustment(recipe, command, db)
             
         # Handle existing commands
-        elif command_lower in ['next', 'next step', 'continue']:
-            return self._handle_next_step(session, recipe, db)
         else:
-            return self._handle_unknown_command(command)
+            return self._process_voice_command(command, session, recipe, db)
         
     def apply_adjusted_recipe(self, recipe: OptimizedRecipe, adjusted_data: dict) -> OptimizedRecipe:
    
