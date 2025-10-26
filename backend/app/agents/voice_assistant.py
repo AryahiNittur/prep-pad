@@ -36,8 +36,14 @@ class VoiceCookingAssistant:
             return self._handle_resume(session, db)
         elif command in ['time', 'how long', 'timer']:
             return self._handle_time_query(session, recipe)
-        elif command in ['timer info', 'timer help', 'start timer']:
+        elif command in ['timer info', 'timer help']:
             return self._handle_timer_info(session, recipe)
+        elif command in ['start timer', 'begin timer']:
+            return self._handle_start_timer(session, recipe)
+        elif command in ['pause timer', 'stop timer']:
+            return self._handle_pause_timer(session)
+        elif command in ['resume timer', 'restart timer', 'continue timer']:
+            return self._handle_resume_timer(session)
         elif command in ['ingredients', 'what ingredients']:
             return self._handle_ingredients_query(recipe)
         else:
@@ -188,11 +194,47 @@ class VoiceCookingAssistant:
             "current_phase": session.current_phase
         }
     
+    def _handle_start_timer(self, session: CookingSession, recipe: OptimizedRecipe) -> Dict[str, Any]:
+        """Start the timer for the current step if applicable"""
+        timer_info = self._enhance_step_with_timer_info(session.current_step)
+        
+        if timer_info["has_timer"]:
+            timer_minutes = timer_info["timer_minutes"]
+            response_text = f"Starting timer for {timer_minutes} minute{'s' if timer_minutes != 1 else ''}. The timer is now running on your screen."
+        else:
+            response_text = "The current step doesn't have a timer requirement. You can start the timer manually from the timer component."
+        
+        return {
+            "response": response_text,
+            "timer_info": timer_info,
+            "should_start_timer": timer_info["has_timer"],
+            "current_step": session.current_step,
+            "current_phase": session.current_phase
+        }
+    
+    def _handle_pause_timer(self, session: CookingSession) -> Dict[str, Any]:
+        """Pause the timer"""
+        return {
+            "response": "Timer paused. Say 'resume timer' to continue.",
+            "should_pause_timer": True,
+            "current_step": session.current_step,
+            "current_phase": session.current_phase
+        }
+    
+    def _handle_resume_timer(self, session: CookingSession) -> Dict[str, Any]:
+        """Resume the timer"""
+        return {
+            "response": "Timer resumed. You can control the timer manually from the screen.",
+            "should_resume_timer": True,
+            "current_step": session.current_step,
+            "current_phase": session.current_phase
+        }
+    
     def _handle_unknown_command(self, command: str) -> Dict[str, Any]:
         """Handle unknown commands"""
         return {
-            "response": f"I didn't understand '{command}'. Try saying 'next', 'repeat', 'what prep', 'pause', 'resume', or 'timer info'.",
-            "suggestions": ["next", "repeat", "what prep", "pause", "resume", "time", "ingredients", "timer info"]
+            "response": f"I didn't understand '{command}'. Try saying 'next', 'repeat', 'what prep', 'pause', 'resume', 'start timer', 'pause timer', 'resume timer', or 'timer info'.",
+            "suggestions": ["next", "repeat", "what prep", "pause", "resume", "time", "ingredients", "timer info", "start timer", "pause timer", "resume timer"]
         }
     
     def _get_current_prep_index(self, session: CookingSession, recipe: OptimizedRecipe) -> int:

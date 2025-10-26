@@ -57,6 +57,9 @@ const CookingSession: React.FC = () => {
   const { speak, cancel, voices } = useSpeechSynthesis();
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
   const [timestamp, setTimestamp] = useState(0);
+  const [shouldStartTimer, setShouldStartTimer] = useState(false);
+  const [shouldPauseTimer, setShouldPauseTimer] = useState(false);
+  const [shouldResumeTimer, setShouldResumeTimer] = useState(false);
 
   const { listen, listening, stop } = useSpeechRecognition({
     onResult: (result) => {
@@ -113,7 +116,7 @@ const CookingSession: React.FC = () => {
         setVoiceCommand('');
         console.log('3set');
         setIsWakeWordMode(true);
-      }, 1000);
+      }, 2000);
     },
   });
 
@@ -202,6 +205,9 @@ const CookingSession: React.FC = () => {
       setLastResponse(voiceResponse.response);
       
       // Update session if provided
+      const stepChanged = voiceResponse.current_step && 
+                         (voiceResponse.current_step !== session?.current_step);
+      
       if (voiceResponse.current_step) {
         setSession(prev => prev ? {
           ...prev,
@@ -209,6 +215,32 @@ const CookingSession: React.FC = () => {
           current_phase: voiceResponse.current_phase || prev.current_phase,
           is_active: !voiceResponse.is_complete,
         } : null);
+      }
+
+      // Check if we should start the timer
+      if (command === 'start timer' && (voiceResponse as any).should_start_timer) {
+        setShouldStartTimer(true);
+        setTimestamp(Date.now()); // Trigger Timer component update
+      } else if (stepChanged) {
+        // Reset timer state only when step changes (not when wake word is detected)
+        setShouldStartTimer(false);
+        setShouldPauseTimer(false);
+        setShouldResumeTimer(false);
+        setTimestamp(0);
+      }
+      
+      // Check if we should pause the timer
+      if ((command === 'pause timer' || command === 'stop timer') && (voiceResponse as any).should_pause_timer) {
+        setShouldPauseTimer(true);
+        setShouldResumeTimer(false);
+        // Don't update timestamp for pause - it would reset the timer
+      }
+      
+      // Check if we should resume the timer
+      if ((command === 'resume timer' || command === 'restart timer' || command === 'continue timer') && (voiceResponse as any).should_resume_timer) {
+        setShouldResumeTimer(true);
+        setShouldPauseTimer(false);
+        // Don't update timestamp for resume - it would reset the timer
       }
 
       cancel();
@@ -268,6 +300,7 @@ const CookingSession: React.FC = () => {
     { command: 'what prep', label: 'What Prep?', icon: <KitchenIcon /> },
     { command: 'time', label: 'Time Left', icon: <TimerIcon /> },
     { command: 'timer info', label: 'Timer Info', icon: <TimerIcon /> },
+    { command: 'start timer', label: 'Start Timer', icon: <TimerIcon /> },
   ];
 
   if (!session) {
@@ -332,10 +365,18 @@ const CookingSession: React.FC = () => {
               
               {/* Timer Component - shows when minutes are detected in the instruction */}
               <Timer 
+                key={session.current_step}
                 instruction={session.current_step}
+                autoStart={shouldStartTimer && timestamp > 0}
+                shouldPause={shouldPauseTimer}
+                shouldResume={shouldResumeTimer}
                 onComplete={() => {
                   // Optional: Auto-advance to next step when timer completes
                   // sendVoiceCommand('next');
+                  setShouldStartTimer(false); // Reset after completion
+                  setShouldPauseTimer(false);
+                  setShouldResumeTimer(false);
+                  setTimestamp(0); // Reset timestamp
                 }}
               />
               
