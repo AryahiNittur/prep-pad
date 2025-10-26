@@ -41,3 +41,9 @@ class VoiceCommand(SQLModel, table=True):
     session_id: int = Field(foreign_key="cookingsession.id")
     command: str  # 'next', 'repeat', 'what_prep', etc.
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+class Favorite(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: str
+    recipe_id: int = Field(foreign_key="recipe.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)

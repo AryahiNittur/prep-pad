@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 from backend.app.db.database import get_db
-from backend.app.models.models import Recipe, CookingSession, VoiceCommand
+from backend.app.models.models import Recipe, CookingSession, VoiceCommand, Favorite
 from backend.app.schemas.schemas import (
     RecipeURLRequest, OptimizedRecipe, VoiceCommandRequest, 
     CookingSessionResponse
@@ -121,6 +121,20 @@ def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
     
     return optimized_recipe
 
+@router.delete("/recipe/{recipe_id}")
+def delete_recipe(recipe_id: int, db: Session = Depends(get_db)):
+    """
+    Delete a recipe by ID
+    """
+    recipe = db.get(Recipe, recipe_id)
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    
+    db.delete(recipe)
+    db.commit()
+    
+    return {"message": "Recipe deleted successfully"}
+
 @router.post("/start_cooking/{recipe_id}", response_model=CookingSessionResponse)
 def start_cooking_session(recipe_id: int, db: Session = Depends(get_db)):
     """
@@ -219,3 +233,84 @@ def get_cooking_session(session_id: int, db: Session = Depends(get_db)):
         is_active=session.is_active,
         started_at=session.started_at
     )
+
+@router.post("/favorites/{recipe_id}")
+def add_to_favorites(recipe_id: int, db: Session = Depends(get_db)):
+    """
+    Add a recipe to favorites
+    """
+    recipe = db.get(Recipe, recipe_id)
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    
+    # Check if already favorited
+    existing_favorite = db.exec(
+        select(Favorite).where(
+            Favorite.user_id == "default_user",
+            Favorite.recipe_id == recipe_id
+        )
+    ).first()
+    
+    if existing_favorite:
+        raise HTTPException(status_code=400, detail="Recipe already in favorites")
+    
+    favorite = Favorite(
+        user_id="default_user",
+        recipe_id=recipe_id
+    )
+    
+    db.add(favorite)
+    db.commit()
+    
+    return {"message": "Recipe added to favorites"}
+
+@router.delete("/favorites/{recipe_id}")
+def remove_from_favorites(recipe_id: int, db: Session = Depends(get_db)):
+    """
+    Remove a recipe from favorites
+    """
+    favorite = db.exec(
+        select(Favorite).where(
+            Favorite.user_id == "default_user",
+            Favorite.recipe_id == recipe_id
+        )
+    ).first()
+    
+    if not favorite:
+        raise HTTPException(status_code=404, detail="Recipe not in favorites")
+    
+    db.delete(favorite)
+    db.commit()
+    
+    return {"message": "Recipe removed from favorites"}
+
+@router.get("/favorites")
+def get_favorites(db: Session = Depends(get_db)):
+    """
+    Get all favorite recipes for the user
+    """
+    favorites = db.exec(
+        select(Favorite).where(Favorite.user_id == "default_user")
+    ).all()
+    
+    favorite_recipes = []
+    for favorite in favorites:
+        recipe = db.get(Recipe, favorite.recipe_id)
+        if recipe:
+            favorite_recipes.append(recipe)
+    
+    return {"recipes": favorite_recipes}
+
+@router.get("/favorites/check/{recipe_id}")
+def check_if_favorite(recipe_id: int, db: Session = Depends(get_db)):
+    """
+    Check if a recipe is favorited by the user
+    """
+    favorite = db.exec(
+        select(Favorite).where(
+            Favorite.user_id == "default_user",
+            Favorite.recipe_id == recipe_id
+        )
+    ).first()
+    
+    return {"is_favorite": favorite is not None}
