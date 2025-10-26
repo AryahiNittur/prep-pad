@@ -12,6 +12,7 @@ import {
   LibraryBooks as LibraryIcon,
   RamenDining as RamenIcon,
   Kitchen as KitchenIcon,
+  Favorite as FavoriteIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -24,6 +25,7 @@ const Navbar: React.FC = () => {
     { label: 'Home', path: '/', icon: <HomeIcon /> },
     { label: 'Parse Recipe', path: '/parse', icon: <RestaurantIcon /> },
     { label: 'Recipe Library', path: '/recipes', icon: <LibraryIcon /> },
+    { label: 'Favorites', path: '/favorites', icon: <FavoriteIcon /> },
   ];
 
   return (

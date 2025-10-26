@@ -11,6 +11,7 @@ import Home from './pages/Home';
 import RecipeParser from './pages/RecipeParser';
 import CookingSession from './pages/CookingSession';
 import RecipeLibrary from './pages/RecipeLibrary';
+import Favorites from './pages/Favorites';
 
 // Create theme
 const theme = createTheme({
@@ -62,6 +63,7 @@ const App: React.FC = () => {
               <Route path="/parse" element={<RecipeParser />} />
               <Route path="/cooking/:sessionId" element={<CookingSession />} />
               <Route path="/recipes" element={<RecipeLibrary />} />
+              <Route path="/favorites" element={<Favorites />} />
             </Routes>
           </motion.main>
         </Box>

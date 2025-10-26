@@ -17,6 +17,8 @@ import {
   People as PeopleIcon,
   PlayArrow as PlayIcon,
   Delete as DeleteIcon,
+  Favorite as FavoriteIcon,
+  FavoriteBorder as FavoriteBorderIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -38,10 +40,12 @@ const RecipeLibrary: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [favorites, setFavorites] = useState<Set<number>>(new Set());
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchRecipes();
+    checkFavorites();
   }, []);
 
   const fetchRecipes = async () => {
@@ -64,6 +68,43 @@ const RecipeLibrary: React.FC = () => {
     }
   };
 
+  const deleteRecipe = async (recipeId: number) => {
+    try {
+      await axios.delete(`http://localhost:8000/api/recipe/${recipeId}`);
+      setRecipes(recipes.filter(recipe => recipe.id !== recipeId));  // This line removes it
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to delete recipe');
+    }
+  };
+
+  const checkFavorites = async () => {
+    try {
+      const favoriteRecipes = await axios.get('http://localhost:8000/api/favorites');
+      const favoriteIds = new Set<number>(favoriteRecipes.data.recipes.map((recipe: Recipe) => recipe.id));
+      setFavorites(favoriteIds);
+    } catch (err) {
+      console.error('Failed to check favorites:', err);
+    }
+  };
+
+  const toggleFavorite = async (recipeId: number) => {
+    try {
+      if (favorites.has(recipeId)) {
+        await axios.delete(`http://localhost:8000/api/favorites/${recipeId}`);
+        setFavorites(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(recipeId);
+          return newSet;
+        });
+      } else {
+        await axios.post(`http://localhost:8000/api/favorites/${recipeId}`);
+        setFavorites(prev => new Set(prev).add(recipeId));
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Failed to update favorites');
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -74,16 +115,57 @@ const RecipeLibrary: React.FC = () => {
 
   if (loading) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-          <CircularProgress />
-        </Box>
-      </Container>
+      <Box
+        sx={{
+          minHeight: '100vh',
+          backgroundImage: 'url("/preppadhomepagephoto.jpg")',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundAttachment: 'fixed',
+          position: 'relative',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(255, 255, 255, 0.85)',
+            zIndex: 1,
+          },
+        }}
+      >
+        <Container maxWidth="lg" sx={{ py: 4, position: 'relative', zIndex: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <CircularProgress />
+          </Box>
+        </Container>
+      </Box>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        backgroundImage: 'url("/preppadhomepagephoto.jpg")',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundAttachment: 'fixed',
+        position: 'relative',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(255, 255, 255, 0.85)',
+          zIndex: 1,
+        },
+      }}
+    >
+      <Container maxWidth="lg" sx={{ py: 4, position: 'relative', zIndex: 2 }}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -198,8 +280,16 @@ const RecipeLibrary: React.FC = () => {
                     </Button>
                     <Button
                       variant="outlined"
+                      color={favorites.has(recipe.id) ? "error" : "inherit"}
+                      onClick={() => toggleFavorite(recipe.id)}
+                      sx={{ minWidth: 'auto' }}
+                    >
+                      {favorites.has(recipe.id) ? <FavoriteIcon /> : <FavoriteBorderIcon />}
+                    </Button>
+                    <Button
+                      variant="outlined"
                       color="error"
-                      onClick={() => startCooking(recipe.id)}
+                      onClick={() => deleteRecipe(recipe.id)}
                       sx={{ minWidth: 'auto' }}
                     >
                       <DeleteIcon />
@@ -211,7 +301,8 @@ const RecipeLibrary: React.FC = () => {
           ))}
         </Box>
       )}
-    </Container>
+      </Container>
+    </Box>
   );
 };
 
