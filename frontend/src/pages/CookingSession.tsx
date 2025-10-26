@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useSpeechSynthesis, useSpeechRecognition } from 'react-speech-kit';
 import {
   Container,
@@ -43,56 +43,77 @@ const CookingSession: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
   const [session, setSession] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [first, setFirst] = useState(true);
   const [voiceCommand, setVoiceCommand] = useState('');
   const [lastResponse, setLastResponse] = useState<string | null>(null);
-  const [isWakeWordMode, setIsWakeWordMode] = useState(true);
+
+  const [isWakeWordMode, setIsWakeWordMode] = useState(false);
+  const isWakeWordModeRef = useRef(isWakeWordMode);
+
+  useEffect(() => {
+    isWakeWordModeRef.current = isWakeWordMode;
+  }, [isWakeWordMode]);
 
   const { speak, cancel, voices } = useSpeechSynthesis();
   const [timeoutId, setTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  const [timestamp, setTimestamp] = useState(0);
 
   const { listen, listening, stop } = useSpeechRecognition({
     onResult: (result) => {
       const speechText = result.toString().toLowerCase();
       setVoiceCommand(speechText);
-      
-      if (isWakeWordMode) {
+      console.log('onresult');
+      console.log(`${isWakeWordModeRef.current}`);
+      if (isWakeWordModeRef.current) {
         // Check for wake word
         if (speechText.includes('hey prep')) {
-          setIsWakeWordMode(false);
-          setVoiceCommand('');
-          return;
+          console.log('1set');
+          setTimeout(() => {
+            setIsWakeWordMode(false);
+            setVoiceCommand('');
+            setTimestamp(Date.now());
+          }, 500);
+          //stop();
         }
       } else {
+        // Actually stop listening and restart for wake word mode
+        /*
+        stop();
+        setTimeout(() => {
+          console.log('1listen');
+          listen({ interimResults: true, lang: 'en-US' });
+          }, 500);*/
+          
+        console.log('in else');
         // Reset timeout when we get new speech input during command mode
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
         const newTimeoutId = setTimeout(() => {
-          setIsWakeWordMode(true);
-          setVoiceCommand('');
+          console.log('RESETER');
           // Actually stop listening and restart for wake word mode
           stop();
-          setTimeout(() => {
-            listen({ interimResults: true, lang: 'en-US' });
-          }, 500);
-        }, 5000); // Return to wake word mode after 5 seconds of silence
+          //setVoiceCommand('');
+          console.log('2set');
+          //setIsWakeWordMode(true);
+        }, 3000); // Return to wake word mode after 3 seconds of silence
+        console.log('setid');
         setTimeoutId(newTimeoutId);
       }
     },
     onEnd: () => {
       if (timeoutId) {
+        console.log('clearid');
         clearTimeout(timeoutId);
         setTimeoutId(null);
       }
       
-      if (!isWakeWordMode && voiceCommand.trim()) {
+      if (!isWakeWordModeRef.current && voiceCommand.trim()) {
         sendVoiceCommand(voiceCommand);
-        // Return to wake word mode after processing command
-        setTimeout(() => {
-          setIsWakeWordMode(true);
-          setVoiceCommand('');
-        }, 1000);
       }
+      // Return to wake word mode after processing command
+      setTimeout(() => {
+        setVoiceCommand('');
+        console.log('3set');
+        setIsWakeWordMode(true);
+      }, 1000);
     },
   });
 
@@ -108,26 +129,13 @@ const CookingSession: React.FC = () => {
       const response = await axios.get(`http://localhost:8000/api/cooking_session/${sessionId}`);
       const sessionData = response.data;
       setSession(sessionData);
+      console.log('session set');
       
       // Speak the first step on startup
-      if (sessionData && sessionData.current_step) {
-        setTimeout(() => {
-          cancel();
-          if (voices.length > 0) {
-            console.log('Available voices:', voices.map(v => v.name));
-            console.log('Using voice index:', voice);
-            speak({ text: `Welcome to your cooking session. ${sessionData.current_step}`, voice: voices[voice] });
-          } else {
-            console.warn('No voices available for speech synthesis');
-            // Fallback to default voice
-            speak({ text: `Welcome to your cooking session. ${sessionData.current_step}` });
-          }
-        }, 2000); // Increased delay to ensure voices are loaded
-      }
     } catch (error) {
       console.error('Failed to fetch session:', error);
     }
-  }, [sessionId, speak, cancel, voices, voice]);
+  }, [sessionId]);
 
   useEffect(() => {
     if (sessionId) {
@@ -135,25 +143,50 @@ const CookingSession: React.FC = () => {
     }
   }, [sessionId, fetchSession]);
 
+  useEffect(() => {
+    if (first && session) {
+      setFirst(false);
+      speak({ text: `Welcome to your cooking session. ${session.current_step}`, voice: voices[voice] });
+      console.log('welcome message spoken');
+      console.log('retard set');
+      setIsWakeWordMode(true);
+    }
+  }, [first, session, speak, voices, voice]);
+
+  useEffect(() => {
+    if (isWakeWordModeRef.current) {
+      console.log('1stop');
+      stop();
+      setTimeout(() => {
+        console.log('newlisten');
+        listen({ interimResults: true, lang: 'en-US' });
+      }, 500);
+    }
+  }, [isWakeWordMode, listen, stop]);
+  
   // Cleanup timeout on unmount
+  /*
   useEffect(() => {
     return () => {
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
     };
-  }, [timeoutId]);
+  }, [timeoutId]); */
 
   // Start listening on mount with delay to ensure component is ready
+  /*
   useEffect(() => {
     const timer = setTimeout(() => {
       if (!listening) {
+        console.log('2listen');
         listen({ interimResults: true, lang: 'en-US' });
       }
     }, 1000); // 1 second delay to ensure component is fully mounted
 
     return () => clearTimeout(timer);
   }, [listening, listen]); // Include dependencies
+  */
 
   const sendVoiceCommand = async (command: string) => {
     if (!sessionId) return;
@@ -179,7 +212,7 @@ const CookingSession: React.FC = () => {
       }
 
       cancel();
-      console.log('Available voices:', voices.map(v => v.name));
+      console.log('2Available voices:', voices.map(v => v.name));
       console.log('Using voice index:', voice);
       if (voices.length > 0) {
         speak({ text: voiceResponse.response, voice: voices[voice] });
@@ -200,22 +233,27 @@ const CookingSession: React.FC = () => {
 
   const toggleSpeechRecognition = () => {
     if (listening) {
+      console.log('2stop');
       stop();
+      /*
       if (timeoutId) {
         clearTimeout(timeoutId);
         setTimeoutId(null);
       }
       setIsWakeWordMode(true);
+      */
     } else {
       setVoiceCommand('');
+      console.log('lastset');
       setIsWakeWordMode(false);
+      console.log('3listen');
       listen({ interimResults: false, lang: 'en-US' });
     }
   };
 
   const testSpeech = () => {
     console.log('Testing speech synthesis...');
-    console.log('Available voices:', voices.map(v => v.name));
+    console.log('3Available voices:', voices.map(v => v.name));
     console.log('Using voice index:', voice);
     if (voices.length > 0) {
       speak({ text: 'Hello, this is a test of the speech synthesis system.', voice: voices[voice] });
