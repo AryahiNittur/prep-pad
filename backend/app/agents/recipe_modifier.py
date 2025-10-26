@@ -10,17 +10,14 @@ import re
 from dotenv import load_dotenv
 
 load_dotenv()
-
 class RecipeModifier:
     def __init__(self):
-        # Use GPT-4 for more sophisticated recipe analysis and modification
+        # Use GPT-4 for sophisticated recipe analysis and modification
         self.llm = ChatOpenAI(
             model="gpt-4",
             temperature=0.3,
             openai_api_key=os.getenv("OPENAI_API_KEY")
         )
-        
-        # Specialized LLM for ingredient analysis with lower temperature for consistency
         self.ingredient_llm = ChatOpenAI(
             model="gpt-4",
             temperature=0.1,
@@ -29,39 +26,37 @@ class RecipeModifier:
 
     def modify_recipe(self, recipe: OptimizedRecipe, modification_request: Dict[str, Any]) -> RecipeModificationResponse:
         """
-        Main method to modify a recipe based on available ingredients, serving size, and preferences
+        Main method to modify a recipe based on available ingredients, serving size, and preferences.
+        All substitutions and modifications are suggested by OpenAI, not a local database.
         """
         available_ingredients = modification_request.get("available_ingredients", [])
         target_servings = modification_request.get("target_servings")
         dietary_preferences = modification_request.get("dietary_preferences", [])
         substitution_preferences = modification_request.get("substitution_preferences", {})
-        
-        # Step 1: Analyze what ingredients are missing
-        missing_ingredients = self._find_missing_ingredients(recipe.ingredients, available_ingredients)
-        
-        # Step 2: Find substitutions for missing ingredients
-        substitutions = self._find_substitutions(
-            missing_ingredients, 
-            available_ingredients, 
-            dietary_preferences, 
+
+        # Step 1: Ask OpenAI for missing ingredients and substitutions
+        substitutions = self._find_substitutions_openai(
+            recipe.ingredients,
+            available_ingredients,
+            dietary_preferences,
             substitution_preferences
         )
-        
-        # Step 3: Scale recipe if serving size changed
+
+        # Step 2: Scale recipe if serving size changed
         scaling_factor = None
         if target_servings and recipe.servings:
             scaling_factor = target_servings / recipe.servings
-        
-        # Step 4: Generate modified recipe using OpenAI
+
+        # Step 3: Generate modified recipe using OpenAI
         modified_recipe = self._generate_modified_recipe(
-            recipe, 
-            substitutions, 
-            scaling_factor, 
+            recipe,
+            substitutions,
+            scaling_factor,
             dietary_preferences,
             available_ingredients
         )
-        
-        # Step 5: Create response
+
+        # Step 4: Create response
         return RecipeModificationResponse(
             modified_recipe=modified_recipe,
             substitutions_made=substitutions,
@@ -71,157 +66,100 @@ class RecipeModifier:
             new_servings=target_servings or recipe.servings or 1
         )
 
-    def _find_missing_ingredients(self, recipe_ingredients: List[Ingredient], available_ingredients: List[AvailableIngredient]) -> List[Ingredient]:
-        """Find ingredients from the recipe that are not available"""
-        available_names = [ing.name.lower().strip() for ing in available_ingredients]
-        missing = []
-        
-        for ingredient in recipe_ingredients:
-            ingredient_name = ingredient.name.lower().strip()
-            if not any(available_name in ingredient_name or ingredient_name in available_name 
-                      for available_name in available_names):
-                missing.append(ingredient)
-        
-        return missing
+    def _find_substitutions_openai(self, recipe_ingredients: List[Ingredient],
+                                   available_ingredients: List[AvailableIngredient],
+                                   dietary_preferences: List[str],
+                                   substitution_preferences: Dict[str, str]) -> List[IngredientSubstitution]:
+        """
+        Use OpenAI to suggest substitutions for missing ingredients.
+        """
+        prompt = self._create_substitution_prompt(
+            recipe_ingredients,
+            available_ingredients,
+            dietary_preferences,
+            substitution_preferences
+        )
+        response = self.ingredient_llm.invoke(prompt)
+        try:
+            data = json.loads(response.content)
+            return [IngredientSubstitution(**sub) for sub in data.get("substitutions", [])]
+        except Exception:
+            return []
 
-    def _find_substitutions(self, missing_ingredients: List[Ingredient], 
-                          available_ingredients: List[AvailableIngredient],
-                          dietary_preferences: List[str],
-                          substitution_preferences: Dict[str, str]) -> List[IngredientSubstitution]:
-        """Find appropriate substitutions for missing ingredients"""
-        substitutions = []
-        available_names = [ing.name.lower().strip() for ing in available_ingredients]
-        
-        for missing_ing in missing_ingredients:
-            substitution = self._find_single_substitution(
-                missing_ing, available_ingredients, dietary_preferences, substitution_preferences
-            )
-            if substitution:
-                substitutions.append(substitution)
-        
-        return substitutions
+    def _create_substitution_prompt(self, recipe_ingredients, available_ingredients, dietary_preferences, substitution_preferences):
+        """
+        Create a prompt for OpenAI to suggest ingredient substitutions.
+        """
+        recipe_ings = "\n".join([f"- {ing.name} ({ing.amount or ''} {ing.unit or ''})" for ing in recipe_ingredients])
+        available_ings = "\n".join([f"- {ing.name} ({ing.amount or ''} {ing.unit or ''})" for ing in available_ingredients])
+        dietary = ", ".join(dietary_preferences) if dietary_preferences else "None"
+        user_prefs = "\n".join([f"{k}: {v}" for k, v in substitution_preferences.items()]) if substitution_preferences else "None"
 
-    def _find_single_substitution(self, missing_ingredient: Ingredient, 
-                                available_ingredients: List[AvailableIngredient],
-                                dietary_preferences: List[str],
-                                substitution_preferences: Dict[str, str]) -> Optional[IngredientSubstitution]:
-        """Find a single substitution for one missing ingredient"""
-        ingredient_name = missing_ingredient.name.lower().strip()
-        
-        # Check user preferences first
-        for original, substitute in substitution_preferences.items():
-            if original.lower() in ingredient_name:
-                # Find the substitute in available ingredients
-                for available in available_ingredients:
-                    if substitute.lower() in available.name.lower():
-                        return IngredientSubstitution(
-                            original_name=missing_ingredient.name,
-                            original_amount=missing_ingredient.amount or "1",
-                            original_unit=missing_ingredient.unit or "unit",
-                            substitute_name=available.name,
-                            substitute_amount=self._calculate_substitute_amount(missing_ingredient, available),
-                            substitute_unit=available.unit or missing_ingredient.unit or "unit",
-                            substitution_reason="User preference",
-                            substitution_notes=f"Substituted based on user preference: {original} -> {substitute}"
-                        )
-        
-        # Check dietary preferences
-        for dietary in dietary_preferences:
-            if dietary.lower() == "vegetarian" or dietary.lower() == "vegan":
-                meat_substitutes = self.substitution_database.get("meat", [])
-                for substitute in meat_substitutes:
-                    for available in available_ingredients:
-                        if substitute.lower() in available.name.lower():
-                            return IngredientSubstitution(
-                                original_name=missing_ingredient.name,
-                                original_amount=missing_ingredient.amount or "1",
-                                original_unit=missing_ingredient.unit or "unit",
-                                substitute_name=available.name,
-                                substitute_amount=self._calculate_substitute_amount(missing_ingredient, available),
-                                substitute_unit=available.unit or missing_ingredient.unit or "unit",
-                                substitution_reason=f"Dietary preference: {dietary}",
-                                substitution_notes=f"Substituted for {dietary} diet"
-                            )
-        
-        # Check substitution database
-        for category, substitutes in self.substitution_database.items():
-            if category.lower() in ingredient_name:
-                for substitute in substitutes:
-                    for available in available_ingredients:
-                        if substitute.lower() in available.name.lower():
-                            return IngredientSubstitution(
-                                original_name=missing_ingredient.name,
-                                original_amount=missing_ingredient.amount or "1",
-                                original_unit=missing_ingredient.unit or "unit",
-                                substitute_name=available.name,
-                                substitute_amount=self._calculate_substitute_amount(missing_ingredient, available),
-                                substitute_unit=available.unit or missing_ingredient.unit or "unit",
-                                substitution_reason="Ingredient substitution",
-                                substitution_notes=f"Substituted {category} with {substitute}"
-                            )
-        
-        return None
+        return f"""
+You are a culinary expert. Given the following recipe ingredients and available ingredients, suggest substitutions for any missing ingredients.
+- Recipe Ingredients:
+{recipe_ings}
+- Available Ingredients:
+{available_ings}
+- Dietary Preferences: {dietary}
+- User Substitution Preferences:
+{user_prefs}
 
-    def _calculate_substitute_amount(self, original: Ingredient, substitute: AvailableIngredient) -> str:
-        """Calculate appropriate amount for substitute ingredient"""
-        # This is a simplified calculation - in practice, you'd want more sophisticated logic
-        if original.amount and substitute.amount:
-            try:
-                # Try to parse amounts and maintain similar ratios
-                orig_amount = float(re.findall(r'\d+\.?\d*', original.amount)[0]) if re.findall(r'\d+\.?\d*', original.amount) else 1
-                sub_amount = float(re.findall(r'\d+\.?\d*', substitute.amount)[0]) if re.findall(r'\d+\.?\d*', substitute.amount) else 1
-                
-                # Use the available amount or scale proportionally
-                return str(min(sub_amount, orig_amount))
-            except:
-                return substitute.amount or "1"
-        
-        return substitute.amount or "1"
+For each missing ingredient, suggest a substitution using only available ingredients and respecting dietary/user preferences.
+Return a JSON list in this format:
+{{
+  "substitutions": [
+    {{
+      "original_name": "string",
+      "original_amount": "string",
+      "original_unit": "string",
+      "substitute_name": "string",
+      "substitute_amount": "string",
+      "substitute_unit": "string",
+      "substitution_reason": "string",
+      "substitution_notes": "string"
+    }}
+  ]
+}}
+"""
 
-    def _generate_modified_recipe(self, original_recipe: OptimizedRecipe, 
-                                substitutions: List[IngredientSubstitution],
-                                scaling_factor: Optional[float],
-                                dietary_preferences: List[str],
-                                available_ingredients: List[AvailableIngredient]) -> OptimizedRecipe:
-        """Use OpenAI to generate a modified recipe"""
-        
-        # Create substitution mapping
+    def _generate_modified_recipe(self, original_recipe: OptimizedRecipe,
+                                  substitutions: List[IngredientSubstitution],
+                                  scaling_factor: Optional[float],
+                                  dietary_preferences: List[str],
+                                  available_ingredients: List[AvailableIngredient]) -> OptimizedRecipe:
+        """
+        Use OpenAI to generate a modified recipe.
+        """
         substitution_map = {sub.original_name: sub for sub in substitutions}
-        
-        # Prepare prompt
         prompt = self._create_modification_prompt(
             original_recipe, substitution_map, scaling_factor, dietary_preferences, available_ingredients
         )
-        
-        # Get AI response
         response = self.llm.invoke(prompt)
-        
         try:
             modified_data = json.loads(response.content)
             return self._parse_modified_recipe(modified_data)
-        except json.JSONDecodeError:
-            # Fallback: manually modify the recipe
+        except Exception:
             return self._manual_recipe_modification(original_recipe, substitutions, scaling_factor)
 
-    def _create_modification_prompt(self, recipe: OptimizedRecipe, 
-                                 substitution_map: Dict[str, IngredientSubstitution],
-                                 scaling_factor: Optional[float],
-                                 dietary_preferences: List[str],
-                                 available_ingredients: List[AvailableIngredient]) -> str:
-        """Create prompt for AI recipe modification"""
-        
+    def _create_modification_prompt(self, recipe: OptimizedRecipe,
+                                    substitution_map: Dict[str, IngredientSubstitution],
+                                    scaling_factor: Optional[float],
+                                    dietary_preferences: List[str],
+                                    available_ingredients: List[AvailableIngredient]) -> str:
+        """
+        Create prompt for AI recipe modification.
+        """
         substitutions_text = "\n".join([
             f"- {sub.original_name} ({sub.original_amount} {sub.original_unit}) -> {sub.substitute_name} ({sub.substitute_amount} {sub.substitute_unit}) - {sub.substitution_reason}"
             for sub in substitution_map.values()
         ])
-        
         available_text = "\n".join([
-            f"- {ing.name} ({ing.amount} {ing.unit})" if ing.amount and ing.unit 
+            f"- {ing.name} ({ing.amount} {ing.unit})" if ing.amount and ing.unit
             else f"- {ing.name}" for ing in available_ingredients
         ])
-        
         scaling_text = f"Scale recipe from {recipe.servings} servings to {int(recipe.servings * scaling_factor)} servings" if scaling_factor else "Keep original serving size"
-        
+
         return f"""
 You are a professional chef and recipe modification expert. Modify this recipe based on the available ingredients and requirements.
 
@@ -277,7 +215,7 @@ Return the modified recipe in this exact JSON format:
         ingredients = [Ingredient(**ing) for ing in data.get('ingredients', [])]
         prep_steps = [PrepStep(**step) for step in data.get('prep_phase', [])]
         cook_steps = [CookStep(**step) for step in data.get('cook_phase', [])]
-        
+
         return OptimizedRecipe(
             title=data.get('title', 'Modified Recipe'),
             ingredients=ingredients,
@@ -290,15 +228,13 @@ Return the modified recipe in this exact JSON format:
             difficulty=data.get('difficulty')
         )
 
-    def _manual_recipe_modification(self, original_recipe: OptimizedRecipe, 
-                                 substitutions: List[IngredientSubstitution],
-                                 scaling_factor: Optional[float]) -> OptimizedRecipe:
-        """Fallback manual recipe modification"""
-        
-        # Create substitution mapping
+    def _manual_recipe_modification(self, original_recipe: OptimizedRecipe,
+                                    substitutions: List[IngredientSubstitution],
+                                    scaling_factor: Optional[float]) -> OptimizedRecipe:
+        """
+        Fallback manual recipe modification (if OpenAI fails).
+        """
         substitution_map = {sub.original_name: sub for sub in substitutions}
-        
-        # Modify ingredients
         modified_ingredients = []
         for ingredient in original_recipe.ingredients:
             if ingredient.name in substitution_map:
@@ -310,7 +246,6 @@ Return the modified recipe in this exact JSON format:
                     notes=f"Substituted for {ingredient.name}"
                 ))
             else:
-                # Apply scaling if needed
                 if scaling_factor and ingredient.amount:
                     try:
                         amount = float(re.findall(r'\d+\.?\d*', ingredient.amount)[0])
@@ -325,8 +260,7 @@ Return the modified recipe in this exact JSON format:
                         modified_ingredients.append(ingredient)
                 else:
                     modified_ingredients.append(ingredient)
-        
-        # Modify prep steps
+
         modified_prep_steps = []
         for step in original_recipe.prep_phase:
             modified_instruction = step.instruction
@@ -334,14 +268,12 @@ Return the modified recipe in this exact JSON format:
                 modified_instruction = modified_instruction.replace(
                     sub.original_name, sub.substitute_name
                 )
-            
             modified_prep_steps.append(PrepStep(
                 instruction=modified_instruction,
                 time_estimate=step.time_estimate,
                 category=step.category
             ))
-        
-        # Modify cook steps
+
         modified_cook_steps = []
         for step in original_recipe.cook_phase:
             modified_instruction = step.instruction
@@ -349,17 +281,15 @@ Return the modified recipe in this exact JSON format:
                 modified_instruction = modified_instruction.replace(
                     sub.original_name, sub.substitute_name
                 )
-            
             modified_cook_steps.append(CookStep(
                 step_number=step.step_number,
                 instruction=modified_instruction,
                 time_estimate=step.time_estimate,
                 parallel_tasks=step.parallel_tasks
             ))
-        
-        # Calculate new servings
+
         new_servings = int(original_recipe.servings * scaling_factor) if scaling_factor else original_recipe.servings
-        
+
         return OptimizedRecipe(
             title=f"Modified {original_recipe.title}",
             ingredients=modified_ingredients,
@@ -372,23 +302,19 @@ Return the modified recipe in this exact JSON format:
             difficulty=original_recipe.difficulty
         )
 
-    def _generate_modification_notes(self, substitutions: List[IngredientSubstitution], 
-                                   scaling_factor: Optional[float],
-                                   dietary_preferences: List[str]) -> str:
+    def _generate_modification_notes(self, substitutions: List[IngredientSubstitution],
+                                     scaling_factor: Optional[float],
+                                     dietary_preferences: List[str]) -> str:
         """Generate human-readable notes about modifications"""
         notes = []
-        
         if substitutions:
             notes.append(f"Made {len(substitutions)} ingredient substitutions:")
             for sub in substitutions:
                 notes.append(f"- {sub.original_name} → {sub.substitute_name} ({sub.substitution_reason})")
-        
         if scaling_factor:
             notes.append(f"Scaled recipe by factor of {scaling_factor:.2f}")
-        
         if dietary_preferences:
             notes.append(f"Applied dietary preferences: {', '.join(dietary_preferences)}")
-        
         return "\n".join(notes) if notes else "No modifications applied"
 
     def adjust_recipe_for_dietary_needs(self, recipe: OptimizedRecipe, dietary_preference: str, servings: int = None) -> Dict[str, Any]:
@@ -401,9 +327,7 @@ Return the modified recipe in this exact JSON format:
             "dietary_preferences": [dietary_preference],
             "substitution_preferences": {}
         }
-        
         result = self.modify_recipe(recipe, modification_request)
-        
         return {
             "adjusted_ingredients": [
                 {

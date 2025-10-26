@@ -41,13 +41,15 @@ Original Recipe:
 Title: {scraped_data.get('title', 'Untitled')}
 Ingredients: {json.dumps(scraped_data.get('ingredients', []), indent=2)}
 Instructions: {json.dumps(scraped_data.get('instructions', []), indent=2)}
+Servings: {scraped_data.get('servings', 'unknown')}
 
 Your job is to:
 1. Parse and clean the ingredients list
-2. Create a "Prep Phase" with all preparation tasks that can be done ahead of time
-3. Create a "Cook Phase" with optimized cooking steps that can be done in parallel where possible
-4. Estimate timing for each step
-5. Identify parallel tasks
+2. Adjust ingredient quantities and instructions if the ingredients or serving size have changed
+3. Create a "Prep Phase" with all preparation tasks that can be done ahead of time
+4. Create a "Cook Phase" with optimized cooking steps that can be done in parallel where possible
+5. Estimate timing for each step
+6. Identify parallel tasks
 
 Return your response as a JSON object with this exact structure:
 {{
@@ -74,6 +76,7 @@ Guidelines:
 - Be specific about timing estimates
 - Make instructions clear and actionable
 - Consider mise-en-place principles (prep everything before cooking)
+- If the ingredients or serving size have changed, update the recipe accordingly
 """
     
     def _parse_optimized_recipe(self, data: dict) -> OptimizedRecipe:
@@ -113,6 +116,6 @@ Guidelines:
             total_time=45,
             prep_time=15,
             cook_time=30,
-            servings=4,
+            servings=scraped_data.get('servings', 4),
             difficulty="medium"
         )
