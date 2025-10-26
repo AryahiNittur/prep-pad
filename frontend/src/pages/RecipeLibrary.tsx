@@ -16,6 +16,7 @@ import {
   AccessTime as TimeIcon,
   People as PeopleIcon,
   PlayArrow as PlayIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -194,6 +195,14 @@ const RecipeLibrary: React.FC = () => {
                       fullWidth
                     >
                       Start Cooking
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      onClick={() => startCooking(recipe.id)}
+                      sx={{ minWidth: 'auto' }}
+                    >
+                      <DeleteIcon />
                     </Button>
                   </CardActions>
                 </Card>
