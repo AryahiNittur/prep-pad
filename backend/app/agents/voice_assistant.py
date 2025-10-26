@@ -445,7 +445,7 @@ class VoiceCookingAssistant:
             new_recipe_id = self._save_modified_recipe(modification_result.modified_recipe, db, "vegan")
             
             return {
-                "response": f"I've created a vegan version of {recipe.title}. The new recipe has been saved with ID {new_recipe_id}.",
+                "response": f"I've created a vegan version of {recipe.title}. The new recipe has been saved.",
                 "new_recipe_id": new_recipe_id,
                 "modified_recipe": modification_result.modified_recipe,
                 "modification_notes": modification_result.modification_notes,
@@ -473,7 +473,7 @@ class VoiceCookingAssistant:
             new_recipe_id = self._save_modified_recipe(modification_result.modified_recipe, db, "gluten-free")
             
             return {
-                "response": f"I've created a gluten-free version of {recipe.title}. The new recipe has been saved with ID {new_recipe_id}.",
+                "response": f"I've created a gluten-free version of {recipe.title}. The new recipe has been saved.",
                 "new_recipe_id": new_recipe_id,
                 "modified_recipe": modification_result.modified_recipe,
                 "modification_notes": modification_result.modification_notes,
@@ -501,7 +501,7 @@ class VoiceCookingAssistant:
             new_recipe_id = self._save_modified_recipe(modification_result.modified_recipe, db, "dairy-free")
             
             return {
-                "response": f"I've created a dairy-free version of {recipe.title}. The new recipe has been saved with ID {new_recipe_id}.",
+                "response": f"I've created a dairy-free version of {recipe.title}. The new recipe has been saved.",
                 "new_recipe_id": new_recipe_id,
                 "modified_recipe": modification_result.modified_recipe,
                 "modification_notes": modification_result.modification_notes,
@@ -531,7 +531,7 @@ class VoiceCookingAssistant:
             new_recipe_id = self._save_modified_recipe(modification_result.modified_recipe, db, f"scaled_{scale_factor}x")
             
             return {
-                "response": f"I've scaled the recipe to {new_servings} servings. The new recipe has been saved with ID {new_recipe_id}.",
+                "response": f"I've scaled the recipe to {new_servings} servings. The new recipe has been saved.",
                 "new_recipe_id": new_recipe_id,
                 "modified_recipe": modification_result.modified_recipe,
                 "modification_notes": modification_result.modification_notes,
