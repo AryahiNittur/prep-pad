@@ -16,17 +16,17 @@ import RecipeLibrary from './pages/RecipeLibrary';
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#ff6b35', // Orange for cooking theme
-      light: '#ff8a65',
-      dark: '#e64a19',
+      main: '#f59e0b', // Amber-500
+      light: '#fbbf24', // Amber-400
+      dark: '#d97706', // Amber-600
     },
     secondary: {
-      main: '#4caf50', // Green for success/ready
-      light: '#81c784',
-      dark: '#388e3c',
+      main: '#f97316', // Orange-500
+      light: '#fb923c', // Orange-400
+      dark: '#ea580c', // Orange-600
     },
     background: {
-      default: '#fafafa',
+      default: '#fffbeb', // Amber-50
       paper: '#ffffff',
     },
   },

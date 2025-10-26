@@ -98,7 +98,7 @@ The frontend communicates with the FastAPI backend through:
 ## 🎨 Theme & Styling
 
 - **Custom Material-UI theme** with cooking colors
-- **Orange primary** (#ff6b35) for cooking theme
+- **Amber to Orange gradient** (#fbbf24 to #f97316) for cooking theme
 - **Green secondary** (#4caf50) for success states
 - **Responsive design** for all screen sizes
 - **Consistent spacing** and typography

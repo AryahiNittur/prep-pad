@@ -10,6 +10,7 @@ import {
   Home as HomeIcon,
   Restaurant as RestaurantIcon,
   LibraryBooks as LibraryIcon,
+  RamenDining as RamenIcon,
   Kitchen as KitchenIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -34,7 +35,7 @@ const Navbar: React.FC = () => {
           transition={{ duration: 0.5 }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', mr: 4 }}>
-            <KitchenIcon sx={{ mr: 1 }} />
+            <RamenIcon sx={{ mr: 1 }} />
             <Typography variant="h6" component="div" sx={{ fontWeight: 600 }}>
               Prep Pad
             </Typography>
