@@ -283,24 +283,11 @@ const CookingSession: React.FC = () => {
     }
   };
 
-  const testSpeech = () => {
-    console.log('Testing speech synthesis...');
-    console.log('3Available voices:', voices.map(v => v.name));
-    console.log('Using voice index:', voice);
-    if (voices.length > 0) {
-      speak({ text: 'Hello, this is a test of the speech synthesis system.', voice: voices[voice] });
-    } else {
-      speak({ text: 'Hello, this is a test of the speech synthesis system.' });
-    }
-  };
-
   const quickCommands = [
     { command: 'next', label: 'Next Step', icon: <NextIcon /> },
     { command: 'repeat', label: 'Repeat', icon: <RepeatIcon /> },
     { command: 'what prep', label: 'What Prep?', icon: <KitchenIcon /> },
     { command: 'time', label: 'Time Left', icon: <TimerIcon /> },
-    { command: 'timer info', label: 'Timer Info', icon: <TimerIcon /> },
-    { command: 'start timer', label: 'Start Timer', icon: <TimerIcon /> },
   ];
 
   if (!session) {
@@ -397,19 +384,13 @@ const CookingSession: React.FC = () => {
                 >
                   Repeat
                 </Button>
-                <Button
-                  variant="outlined"
-                  onClick={testSpeech}
-                  disabled={loading}
-                >
-                  Test Speech
-                </Button>
               </Box>
             </CardContent>
           </Card>
         </motion.div>
 
         {/* Voice Response */}
+        {/*
         <AnimatePresence>
           {lastResponse && (
             <motion.div
@@ -423,6 +404,7 @@ const CookingSession: React.FC = () => {
             </motion.div>
           )}
         </AnimatePresence>
+        */}
 
         {/* Wake Word Status Indicator */}
         {!listening && isWakeWordMode && (
@@ -456,7 +438,7 @@ const CookingSession: React.FC = () => {
                   <Typography>
                     {isWakeWordMode ? (
                       <>
-                        Listening for "Hey Prep"... {voiceCommand && `"${voiceCommand}"`}
+                        Listening for "Hey Prep"...
                         <Typography variant="caption" display="block" sx={{ opacity: 0.8 }}>
                           Say "Hey Prep" to activate voice commands
                         </Typography>
@@ -509,7 +491,7 @@ const CookingSession: React.FC = () => {
 
         {/* Floating Action Button */}
         <Fab
-          color={isWakeWordMode ? "default" : (listening ? "secondary" : "primary")}
+          color={isWakeWordMode ? "primary" : (listening ? "secondary" : "default")}
           aria-label="voice command"
           sx={{
             position: 'fixed',

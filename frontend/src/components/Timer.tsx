@@ -6,7 +6,6 @@ import {
   Card,
   CardContent,
   LinearProgress,
-  IconButton,
   Alert,
 } from '@mui/material';
 import {
@@ -41,7 +40,6 @@ const Timer: React.FC<TimerProps> = ({ instruction, onComplete, autoStart = fals
   });
   const [showTimer, setShowTimer] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Initialize timer when instruction changes
   useEffect(() => {
